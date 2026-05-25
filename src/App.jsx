@@ -30,8 +30,8 @@ const C = {
   bg3:      "#1c2535",
   border:   "#1e2d4a",
   border2:  "#2d3f5c",
-  amber:    "#2261c5",
-  amberL:   "#3b82f6",
+  amber:    "#f09b1c",
+  amberL:   "#f3ad2b",
   blue:     "#3b82f6",
   green:    "#10b981",
   red:      "#ef4444",
@@ -219,7 +219,7 @@ const fmt = {
 /* ═══════════════════════════════════════════════
    COMPONENTES BASE
 ═══════════════════════════════════════════════ */
-function KPICard({ label, value, sub, trend, icon: Icon, color = C.amber }) {
+function KPICard({ label, value, sub, trend, icon: Icon, color = C.blue }) {
   const up = trend > 0;
   return (
     <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 12, padding: "20px 24px", display:"flex", flexDirection:"column", gap:12 }}>
@@ -251,7 +251,7 @@ function SectionTitle({ children, action }) {
   return (
     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
       <h2 style={{ color: C.text1, fontSize: 16, fontWeight: 600, margin:0 }}>{children}</h2>
-      {action && <button onClick={action.fn} style={{ color: C.amber, fontSize: 13, background:"none", border:"none", cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
+      {action && <button onClick={action.fn} style={{ color: C.blue, fontSize: 13, background:"none", border:"none", cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
         {action.label} <ChevronRight size={14}/>
       </button>}
     </div>
@@ -287,7 +287,7 @@ const CHART_TOOLTIP = {
 };
 
 /* ─── Barra horizontal ranking ─── */
-function RankingBar({ label, value, max, rank, color = C.amber }) {
+function RankingBar({ label, value, max, rank, color = C.blue }) {
   const pct = max ? (value / max) * 100 : 0;
   return (
     <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderBottom:`1px solid ${C.border}` }}>
@@ -379,7 +379,7 @@ function LoginScreen({ onLogin }) {
             {error && <div style={{ color:C.red, fontSize:13, display:"flex", alignItems:"center", gap:6 }}><AlertCircle size={14}/>{error}</div>}
 
             <button onClick={handleLogin} disabled={loading} style={{
-              background: loading ? C.bg3 : C.amber, color:"#000", fontWeight:700, fontSize:14,
+              background: loading ? C.bg3 : C.blue, color:"#000", fontWeight:700, fontSize:14,
               border:"none", borderRadius:8, padding:"14px", cursor: loading ? "wait":"pointer",
               marginTop:4, transition:"all 0.2s", display:"flex", alignItems:"center", justifyContent:"center", gap:8
             }}>
@@ -424,7 +424,7 @@ function Sidebar({ active, onNav, collapsed, user }) {
     <div style={{ width: collapsed ? 64 : 240, minWidth: collapsed ? 64 : 240, background:C.bg1, borderRight:`1px solid ${C.border}`, display:"flex", flexDirection:"column", height:"100vh", transition:"width 0.2s, min-width 0.2s", overflow:"hidden", position:"sticky", top:0 }}>
       {/* logo */}
       <div style={{ padding:"20px 16px 16px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", gap:12 }}>
-        <div style={{ width:34, height:34, borderRadius:8, background:C.amber, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+        <div style={{ width:34, height:34, borderRadius:8, background:C.blue, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
           <BarChart2 size={18} color="#000" strokeWidth={2.5}/>
         </div>
         {!collapsed && <span style={{ color:C.text1, fontWeight:700, fontSize:15, letterSpacing:"-0.02em", whiteSpace:"nowrap" }}>BI Corporativo</span>}
@@ -438,12 +438,12 @@ function Sidebar({ active, onNav, collapsed, user }) {
           return (
             <button key={item.id} onClick={()=>onNav(item.id)} style={{
               width:"100%", display:"flex", alignItems:"center", gap:10, padding: collapsed ? "11px 15px" : "10px 12px",
-              background: isActive ? `${C.amber}18` : "none",
-              border: isActive ? `1px solid ${C.amber}30` : "1px solid transparent",
+              background: isActive ? `${C.blue}18` : "none",
+              border: isActive ? `1px solid ${C.blue}30` : "1px solid transparent",
               borderRadius:8, cursor:"pointer", marginBottom:2, textAlign:"left", transition:"all 0.15s"
             }}>
-              <Icon size={18} color={isActive ? C.amber : C.text3} style={{flexShrink:0}}/>
-              {!collapsed && <span style={{ color: isActive ? C.amber : C.text2, fontSize:13, fontWeight: isActive ? 600 : 400, whiteSpace:"nowrap" }}>{item.label}</span>}
+              <Icon size={18} color={isActive ? C.blue : C.text3} style={{flexShrink:0}}/>
+              {!collapsed && <span style={{ color: isActive ? C.blue : C.text2, fontSize:13, fontWeight: isActive ? 600 : 400, whiteSpace:"nowrap" }}>{item.label}</span>}
             </button>
           );
         })}
@@ -453,8 +453,8 @@ function Sidebar({ active, onNav, collapsed, user }) {
       {!collapsed && (
         <div style={{ padding:"12px 16px", borderTop:`1px solid ${C.border}` }}>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            <div style={{ width:32, height:32, borderRadius:8, background:`${C.amber}20`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-              <span style={{ color:C.amber, fontSize:12, fontWeight:700 }}>{user.nome[0].toUpperCase()}</span>
+            <div style={{ width:32, height:32, borderRadius:8, background:`${C.blue}20`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+              <span style={{ color:C.blue, fontSize:12, fontWeight:700 }}>{user.nome[0].toUpperCase()}</span>
             </div>
             <div style={{ minWidth:0 }}>
               <div style={{ color:C.text1, fontSize:12, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{user.nome}</div>
@@ -525,7 +525,7 @@ function DashHome({ onNav }) {
         <Card>
           <SectionTitle action={{label:"Ver detalhes", fn:()=>onNav("vendas")}}>Top Vendedores</SectionTitle>
           {MOCK.vendas.vendedores.slice(0,5).map((v,i)=>(
-            <RankingBar key={i} rank={i+1} label={v.nome_vendedor} value={v.valor_liquido} max={MOCK.vendas.vendedores[0].valor_liquido} color={i===0?C.amber:C.green}/>
+            <RankingBar key={i} rank={i+1} label={v.nome_vendedor} value={v.valor_liquido} max={MOCK.vendas.vendedores[0].valor_liquido} color={i===0?C.purple:C.green}/>
           ))}
         </Card>
       </div>
@@ -668,7 +668,7 @@ function DashVendas() {
               <XAxis type="number" tick={{fill:C.text3,fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>`${v/1000}k`}/>
               <YAxis type="category" dataKey="nome_filial" tick={{fill:C.text2,fontSize:12}} axisLine={false} tickLine={false} width={70}/>
               <Tooltip {...CHART_TOOLTIP} formatter={v=>[fmt.brl(v),"Faturamento"]}/>
-              <Bar dataKey="valor_liquido" fill={C.amber} radius={[0,4,4,0]}/>
+              <Bar dataKey="valor_liquido" fill={C.blue} radius={[0,4,4,0]}/>
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -809,7 +809,7 @@ function DashProducao() {
                 const s = o.qtde_finalizada===o.qtde_inicial?"Finalizada":o.qtde_em_producao>0?"Em Produção":"Pendente";
                 return (
                   <tr key={i} style={{ borderBottom:`1px solid ${C.border}` }}>
-                    <td style={{ color:C.amber, padding:"10px 12px", fontFamily:"monospace", fontWeight:600 }}>{o.n_ordem}</td>
+                    <td style={{ color:C.blue, padding:"10px 12px", fontFamily:"monospace", fontWeight:600 }}>{o.n_ordem}</td>
                     <td style={{ color:C.text1, padding:"10px 12px" }}>{o.grupo_ordem}</td>
                     <td style={{ color:C.text2, padding:"10px 12px" }}>{o.tipo_producao}</td>
                     <td style={{ color:C.text2, padding:"10px 12px" }}>{o.data_previsto}</td>
