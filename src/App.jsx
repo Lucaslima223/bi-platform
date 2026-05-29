@@ -17,7 +17,7 @@ import {
 ═══════════════════════════════════════════════ */
 const CONFIG = {
   AUTH_ENDPOINT: "https://seu-servico-mae.com/api/auth/login",
-  API_BASE:      "http://192.168.15.38:6017/api/millenium_omnia_bi/",
+  API_BASE:      "http://localhost:3001/api",
 };
 
 /* ═══════════════════════════════════════════════
