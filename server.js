@@ -180,7 +180,7 @@ app.post("/api/auth/logout", authMiddleware, (req, res) => {
 //    METAF               → meta vigente por filial
 // ═══════════════════════════════════════════════════════════════
 
-app.get("/api/home", authMiddleware, async (req, res) => {
+app.get("/api/home", async (req, res) => {
   try {
     const { datai, dataf } = defaultRange(req);
     const mes = currentMonth();
@@ -316,7 +316,7 @@ app.get("/api/home", authMiddleware, async (req, res) => {
 //    METAV               → valor_meta, data_inicial, data_final, cod_funcionario
 // ═══════════════════════════════════════════════════════════════
 
-app.get("/api/vendas", authMiddleware, async (req, res) => {
+app.get("/api/vendas", async (req, res) => {
   try {
     const { datai, dataf } = defaultRange(req);
 
@@ -464,7 +464,7 @@ app.get("/api/vendas", authMiddleware, async (req, res) => {
 //    MOVIMENTO_COMPRA_ITENS → valor_liquido_total, descricao_categoria
 // ═══════════════════════════════════════════════════════════════
 
-app.get("/api/compras", authMiddleware, async (req, res) => {
+app.get("/api/compras", async (req, res) => {
   try {
     const { datai, dataf } = defaultRange(req);
 
@@ -547,7 +547,7 @@ app.get("/api/compras", authMiddleware, async (req, res) => {
 //                     descricao_grupo, descricao1 (produto)
 // ═══════════════════════════════════════════════════════════════
 
-app.get("/api/producao", authMiddleware, async (req, res) => {
+app.get("/api/producao", async (req, res) => {
   try {
     const { datai, dataf } = defaultRange(req);
 
@@ -633,7 +633,7 @@ app.get("/api/producao", authMiddleware, async (req, res) => {
 //          saldo, empenho, fisico, descricao_grupo, descricao_categoria
 // ═══════════════════════════════════════════════════════════════
 
-app.get("/api/estoque", authMiddleware, async (req, res) => {
+app.get("/api/estoque", async (req, res) => {
   try {
     const COLORS = ["#3b82f6","#f09b1c","#8b5cf6","#10b981","#64748b"];
 
@@ -731,7 +731,7 @@ app.get("/api/estoque", authMiddleware, async (req, res) => {
 //    qtde_item_cancelada, qtde_item_reservado, qtde_item_entregue
 // ═══════════════════════════════════════════════════════════════
 
-app.get("/api/pedido_venda", authMiddleware, async (req, res) => {
+app.get("/api/pedido_venda", async (req, res) => {
   try {
     const { datai, dataf } = defaultRange(req);
 
@@ -838,7 +838,7 @@ app.get("/api/pedido_venda", authMiddleware, async (req, res) => {
 //    desconto_pedido, cortesia_pedido, frete_pedido, valor_liquido_pedido
 // ═══════════════════════════════════════════════════════════════
 
-app.get("/api/pedido_compra", authMiddleware, async (req, res) => {
+app.get("/api/pedido_compra", async (req, res) => {
   try {
     const { datai, dataf } = defaultRange(req);
 

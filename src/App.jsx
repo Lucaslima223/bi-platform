@@ -11,6 +11,8 @@ import {
   Award, RefreshCw, AlertCircle, CheckCircle, Clock,
   Menu, Home, Loader
 } from "lucide-react";
+import logo from "./assets/Omnia_Analytics.png";
+import favicon from "./assets/faviconbi.png"
 
 /* ═══════════════════════════════════════════════
    CONFIGURAÇÃO DE API
@@ -256,18 +258,14 @@ const fmt = {
    Retorna { data, loading, reload }
 ═══════════════════════════════════════════════ */
 function useApiData(endpoint, fallback) {
-  const { token } = useContext(AuthCtx);
   const [data, setData]       = useState(fallback);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);
 
   const load = useCallback(() => {
-    if (!token) return;
     setLoading(true);
     setError(null);
-    fetch(`${CONFIG.API_BASE}${endpoint}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    fetch(`${CONFIG.API_BASE}${endpoint}`)
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -275,7 +273,7 @@ function useApiData(endpoint, fallback) {
       .then(json => setData(json))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [token, endpoint]);
+  }, [endpoint]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -431,10 +429,14 @@ function LoginScreen({ onLogin }) {
       <div style={{ width:400, position:"relative" }}>
         <div style={{ textAlign:"center", marginBottom:40 }}>
           <div style={{ display:"inline-flex", alignItems:"center", gap:10, marginBottom:12 }}>
-            <div style={{ width:40, height:40, borderRadius:10, background:C.blue, display:"flex", alignItems:"center", justifyContent:"center" }}>
-              <BarChart2 size={22} color="#000" strokeWidth={2.5}/>
-            </div>
-            <span style={{ color:C.text1, fontSize:22, fontWeight:700, letterSpacing:"-0.02em" }}>BI Corporativo</span>
+            <img
+              src={logo}
+              alt="BI Corporativo"
+              style={{
+              height: 40,
+              objectFit: "contain"
+              }}
+            />
           </div>
           <p style={{ color:C.text2, fontSize:14, margin:0 }}>Inteligência empresarial em tempo real</p>
         </div>
@@ -493,12 +495,26 @@ const NAV = [
 function Sidebar({ active, onNav, collapsed, user }) {
   return (
     <div style={{ width: collapsed ? 64 : 240, minWidth: collapsed ? 64 : 240, background:C.bg1, borderRight:`1px solid ${C.border}`, display:"flex", flexDirection:"column", height:"100vh", transition:"width 0.2s, min-width 0.2s", overflow:"hidden", position:"sticky", top:0 }}>
-      <div style={{ padding:"20px 16px 16px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", gap:12 }}>
-        <div style={{ width:34, height:34, borderRadius:8, background:C.blue, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-          <BarChart2 size={18} color="#000" strokeWidth={2.5}/>
-        </div>
-        {!collapsed && <span style={{ color:C.text1, fontWeight:700, fontSize:15, letterSpacing:"-0.02em", whiteSpace:"nowrap" }}>BI Corporativo</span>}
-      </div>
+      <div
+  style={{
+    padding: "20px 16px 16px",
+    borderBottom: `1px solid ${C.border}`,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: collapsed ? "center" : "flex-start",
+    gap: 12
+  }}
+>
+  <img
+    src={collapsed ? favicon : logo}
+    alt="BI Corporativo"
+    style={{
+      height: collapsed ? 32 : 26,
+      width: "auto",
+      objectFit: "contain"
+    }}
+  />
+</div>
 
       <nav style={{ flex:1, padding:"12px 8px", overflowY:"auto" }}>
         {NAV.map(item => {
@@ -1222,15 +1238,11 @@ const SCREEN_TITLES = {
 };
 
 export default function App() {
-  const [session,   setSession]   = useState(null);
+  const [session,   setSession]   = useState({ ...MOCK.usuario, token: null });
   const [screen,    setScreen]    = useState("home");
   const [collapsed, setCollapsed] = useState(false);
 
-  const handleLogin  = (data) => setSession({ ...MOCK.usuario, ...data });
-  const handleLogout = () => setSession(null);
-
-  if (!session) return <LoginScreen onLogin={handleLogin}/>;
-
+  const handleLogout = () => setSession({ ...MOCK.usuario, token: null });
   const Content = {
     home:          DashHome,
     vendas:        DashVendas,
@@ -1242,20 +1254,20 @@ export default function App() {
   }[screen];
 
   return (
-    <AuthCtx.Provider value={{ token: session.token }}>
-      <div style={{ display:"flex", minHeight:"100vh", background:C.bg0, fontFamily:"system-ui,-apple-system,sans-serif" }}>
-        <Sidebar active={screen} onNav={setScreen} collapsed={collapsed} user={session}/>
-        <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, overflow:"hidden" }}>
-          <Header title={SCREEN_TITLES[screen]} onToggleSidebar={()=>setCollapsed(c=>!c)} onLogout={handleLogout}/>
-          <main style={{ flex:1, overflowY:"auto", padding:24 }}>
-            {screen === "home"
-              ? <DashHome onNav={setScreen}/>
-              : <Content/>
-            }
-          </main>
-        </div>
+    <>
+    <div style={{ display:"flex", minHeight:"100vh", background:C.bg0, fontFamily:"system-ui,-apple-system,sans-serif" }}>
+      <Sidebar active={screen} onNav={setScreen} collapsed={collapsed} user={session}/>
+      <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, overflow:"hidden" }}>
+        <Header title={SCREEN_TITLES[screen]} onToggleSidebar={()=>setCollapsed(c=>!c)} onLogout={handleLogout}/>
+        <main style={{ flex:1, overflowY:"auto", padding:24 }}>
+          {screen === "home"
+            ? <DashHome onNav={setScreen}/>
+            : <Content/>
+          }
+        </main>
       </div>
-      <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
-    </AuthCtx.Provider>
+    </div>
+    <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
+    </>
   );
 }
