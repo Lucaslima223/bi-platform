@@ -28,6 +28,15 @@ const CONFIG = {
 const AuthCtx = createContext(null);
 
 /* ═══════════════════════════════════════════════
+   DATE RANGE CONTEXT  —  filtro global de período
+═══════════════════════════════════════════════ */
+const DateRangeCtx = createContext(null);
+
+function useDateRange() {
+  return useContext(DateRangeCtx);
+}
+
+/* ═══════════════════════════════════════════════
    PALETA DE CORES
 ═══════════════════════════════════════════════ */
 const C = {
@@ -261,11 +270,15 @@ function useApiData(endpoint, fallback) {
   const [data, setData]       = useState(fallback);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);
+  const dateRange             = useDateRange();
 
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    fetch(`${CONFIG.API_BASE}${endpoint}`)
+    const params = dateRange
+      ? `?datai=${dateRange.datai}&dataf=${dateRange.dataf}`
+      : "";
+    fetch(`${CONFIG.API_BASE}${endpoint}${params}`)
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -273,7 +286,7 @@ function useApiData(endpoint, fallback) {
       .then(json => setData(json))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [endpoint]);
+  }, [endpoint, dateRange]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -556,15 +569,120 @@ function Sidebar({ active, onNav, collapsed, user }) {
    HEADER
 ═══════════════════════════════════════════════ */
 function Header({ title, onToggleSidebar, onLogout }) {
+  const { datai, dataf, setDateRange } = useDateRange();
+  const [open, setOpen] = useState(false);
+  const [localDatai, setLocalDatai] = useState(datai);
+  const [localDataf, setLocalDataf] = useState(dataf);
+
+  const handleApply = () => {
+    if (localDatai && localDataf && localDatai <= localDataf) {
+      setDateRange({ datai: localDatai, dataf: localDataf });
+      setOpen(false);
+    }
+  };
+
+  const handlePreset = (months) => {
+    const end   = new Date();
+    const start = new Date();
+    start.setMonth(start.getMonth() - months);
+    const di = start.toISOString().split("T")[0];
+    const df = end.toISOString().split("T")[0];
+    setLocalDatai(di);
+    setLocalDataf(df);
+    setDateRange({ datai: di, dataf: df });
+    setOpen(false);
+  };
+
+  const fmtDate = (iso) => {
+    if (!iso) return "";
+    const [y,m,d] = iso.split("-");
+    return `${d}/${m}/${y}`;
+  };
+
+  const inp = {
+    background: C.bg3, border: `1px solid ${C.border2}`,
+    borderRadius: 6, color: C.text1, padding: "7px 10px",
+    fontSize: 13, outline: "none", colorScheme: "dark",
+  };
+
   return (
-    <div style={{ height:56, borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 24px", background:C.bg1, position:"sticky", top:0, zIndex:10 }}>
+    <div style={{ height:56, borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"space-between", padding:"0 24px", background:C.bg1, position:"sticky", top:0, zIndex:20 }}>
       <div style={{ display:"flex", alignItems:"center", gap:12 }}>
         <button onClick={onToggleSidebar} style={{ background:"none", border:"none", cursor:"pointer", color:C.text3, display:"flex", alignItems:"center" }}>
           <Menu size={18}/>
         </button>
         <h1 style={{ color:C.text1, fontSize:15, fontWeight:600, margin:0 }}>{title}</h1>
       </div>
-      <div style={{ display:"flex", alignItems:"center", gap:16 }}>
+
+      <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+        {/* Botão filtro de data */}
+        <div style={{ position:"relative" }}>
+          <button
+            onClick={() => { setLocalDatai(datai); setLocalDataf(dataf); setOpen(o=>!o); }}
+            style={{
+              display:"flex", alignItems:"center", gap:8,
+              background: C.bg3, border:`1px solid ${open ? C.amber : C.border2}`,
+              borderRadius:8, padding:"6px 12px", cursor:"pointer",
+              color: C.text1, fontSize:13, transition:"border-color 0.15s",
+            }}
+          >
+            <Clock size={14} color={C.amber}/>
+            <span style={{ color: C.text2, fontSize:12 }}>
+              {fmtDate(datai)} — {fmtDate(dataf)}
+            </span>
+            <ChevronRight size={13} color={C.text3} style={{ transform: open ? "rotate(90deg)" : "rotate(0)", transition:"transform 0.2s" }}/>
+          </button>
+
+          {open && (
+            <div style={{
+              position:"absolute", right:0, top:"calc(100% + 8px)",
+              background:C.bg2, border:`1px solid ${C.border2}`,
+              borderRadius:12, padding:20, width:300, zIndex:100,
+              boxShadow:"0 8px 32px rgba(0,0,0,0.5)",
+            }}>
+              <p style={{ color:C.text2, fontSize:11, fontWeight:600, letterSpacing:"0.06em", textTransform:"uppercase", margin:"0 0 12px" }}>Período</p>
+
+              {/* Presets */}
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:16 }}>
+                {[
+                  { label:"30 dias",  months:1  },
+                  { label:"3 meses",  months:3  },
+                  { label:"6 meses",  months:6  },
+                  { label:"12 meses", months:12 },
+                  { label:"2 anos",   months:24 },
+                  { label:"5 anos",   months:60 },
+                ].map(p => (
+                  <button key={p.label} onClick={() => handlePreset(p.months)} style={{
+                    background: C.bg3, border:`1px solid ${C.border2}`,
+                    borderRadius:6, padding:"5px 10px", cursor:"pointer",
+                    color:C.text2, fontSize:12, transition:"all 0.15s",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = C.amber; e.currentTarget.style.color = C.amber; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.border2; e.currentTarget.style.color = C.text2; }}
+                  >{p.label}</button>
+                ))}
+              </div>
+
+              {/* Inputs manuais */}
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                <div>
+                  <label style={{ color:C.text3, fontSize:11, fontWeight:600, letterSpacing:"0.04em", display:"block", marginBottom:5 }}>DE</label>
+                  <input type="date" value={localDatai} onChange={e => setLocalDatai(e.target.value)} style={{...inp, width:"100%", boxSizing:"border-box"}}/>
+                </div>
+                <div>
+                  <label style={{ color:C.text3, fontSize:11, fontWeight:600, letterSpacing:"0.04em", display:"block", marginBottom:5 }}>ATÉ</label>
+                  <input type="date" value={localDataf} onChange={e => setLocalDataf(e.target.value)} style={{...inp, width:"100%", boxSizing:"border-box"}}/>
+                </div>
+                <button onClick={handleApply} style={{
+                  background: C.amber, color:"#000", fontWeight:700, fontSize:13,
+                  border:"none", borderRadius:8, padding:"10px", cursor:"pointer",
+                  marginTop:4, transition:"opacity 0.15s",
+                }}>Aplicar Filtro</button>
+              </div>
+            </div>
+          )}
+        </div>
+
         <button style={{ background:"none", border:"none", cursor:"pointer", color:C.text3 }}><Bell size={17}/></button>
         <button onClick={onLogout} style={{ background:"none", border:"none", cursor:"pointer", color:C.text3, display:"flex", alignItems:"center", gap:6, fontSize:13 }}>
           <LogOut size={15}/> Sair
@@ -1242,6 +1360,10 @@ export default function App() {
   const [screen,    setScreen]    = useState("home");
   const [collapsed, setCollapsed] = useState(false);
 
+  // Intervalo inicial: 2020-01-01 até hoje (cobre 2022/2023)
+  const today = new Date().toISOString().split("T")[0];
+  const [dateRange, setDateRange] = useState({ datai: "2020-01-01", dataf: today });
+
   const handleLogout = () => setSession({ ...MOCK.usuario, token: null });
   const Content = {
     home:          DashHome,
@@ -1255,6 +1377,7 @@ export default function App() {
 
   return (
     <>
+    <DateRangeCtx.Provider value={{ ...dateRange, setDateRange }}>
     <div style={{ display:"flex", minHeight:"100vh", background:C.bg0, fontFamily:"system-ui,-apple-system,sans-serif" }}>
       <Sidebar active={screen} onNav={setScreen} collapsed={collapsed} user={session}/>
       <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, overflow:"hidden" }}>
@@ -1267,6 +1390,7 @@ export default function App() {
         </main>
       </div>
     </div>
+    </DateRangeCtx.Provider>
     <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
     </>
   );
