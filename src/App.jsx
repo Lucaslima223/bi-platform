@@ -7,9 +7,9 @@ import {
 import {
   TrendingUp, TrendingDown, ShoppingCart, Package,
   ClipboardList, Warehouse, BarChart2, ShoppingBag,
-  LogOut, Settings, Bell, ChevronRight,
+  LogOut, Bell, ChevronRight,
   Award, RefreshCw, AlertCircle, CheckCircle, Clock,
-  Menu, Home, Loader
+  Menu, Home, Loader, Users, Box, Search, User
 } from "lucide-react";
 import logo from "./assets/Omnia_Analytics.png";
 import favicon from "./assets/faviconbi.png"
@@ -18,8 +18,7 @@ import favicon from "./assets/faviconbi.png"
    CONFIGURAÇÃO DE API
 ═══════════════════════════════════════════════ */
 const CONFIG = {
-  AUTH_ENDPOINT: "https://seu-servico-mae.com/api/auth/login",
-  API_BASE:      "http://localhost:3001/api",
+  API_BASE: "http://localhost:3001/api",
 };
 
 /* ═══════════════════════════════════════════════
@@ -34,6 +33,15 @@ const DateRangeCtx = createContext(null);
 
 function useDateRange() {
   return useContext(DateRangeCtx);
+}
+
+/* ═══════════════════════════════════════════════
+   FILTERS CONTEXT  —  filtro global de filial e vendedor
+═══════════════════════════════════════════════ */
+const FiltersCtx = createContext(null);
+
+function useFilters() {
+  return useContext(FiltersCtx);
 }
 
 /* ═══════════════════════════════════════════════
@@ -57,199 +65,7 @@ const C = {
   text3:  "#64748b",
 };
 
-/* ═══════════════════════════════════════════════
-   DADOS MOCK  —  usados como estado inicial / fallback
-═══════════════════════════════════════════════ */
-const MOCK = {
-  usuario: { nome: "Admin Geral", filial: "Matriz SP", perfil: "administrador" },
 
-  home: {
-    kpis: { faturamento: 4_286_340, compras: 2_140_820, pedidos_aberto: 556, em_producao: 312 },
-    vendas_periodo: [
-      { mes:"Jan", valor:318000 }, { mes:"Fev", valor:295000 }, { mes:"Mar", valor:412000 },
-      { mes:"Abr", valor:387000 }, { mes:"Mai", valor:421000 }, { mes:"Jun", valor:368000 },
-      { mes:"Jul", valor:445000 }, { mes:"Ago", valor:398000 }, { mes:"Set", valor:472000 },
-      { mes:"Out", valor:489000 }, { mes:"Nov", valor:431000 }, { mes:"Dez", valor:450000 },
-    ],
-    top_vendedores: [
-      { nome_vendedor:"Carlos Mendes",  valor_liquido:682000 },
-      { nome_vendedor:"Ana Beatriz",    valor_liquido:591000 },
-      { nome_vendedor:"Roberto Lima",   valor_liquido:534000 },
-      { nome_vendedor:"Fernanda Costa", valor_liquido:498000 },
-      { nome_vendedor:"Marcos Souza",   valor_liquido:445000 },
-    ],
-    estoque_filial: [
-      { nome_filial:"SP Centro", qtde:2840 }, { nome_filial:"SP Sul", qtde:1920 },
-      { nome_filial:"RJ", qtde:1410 },        { nome_filial:"MG", qtde:980   },
-      { nome_filial:"PR", qtde:740  },        { nome_filial:"RS", qtde:531   },
-    ],
-    producao_status: [
-      { name:"Finalizada",  value:891, color:C.green },
-      { name:"Em Produção", value:312, color:C.amber },
-      { name:"Cancelada",   value:44,  color:C.red   },
-    ],
-    pedido_venda_status: [
-      { name:"Aprovado",  value:1291, color:C.green },
-      { name:"A Faturar", value:387,  color:C.amber },
-      { name:"Pendente",  value:169,  color:C.red   },
-    ],
-  },
-
-  vendas: {
-    kpis: { faturamento: 4_286_340, ticket_medio: 1_872, operacoes: 2_289, meta_pct: 91.4 },
-    periodo: [
-      { mes:"Jan", valor:318000, meta:340000 }, { mes:"Fev", valor:295000, meta:320000 },
-      { mes:"Mar", valor:412000, meta:380000 }, { mes:"Abr", valor:387000, meta:370000 },
-      { mes:"Mai", valor:421000, meta:400000 }, { mes:"Jun", valor:368000, meta:390000 },
-      { mes:"Jul", valor:445000, meta:420000 }, { mes:"Ago", valor:398000, meta:410000 },
-      { mes:"Set", valor:472000, meta:450000 }, { mes:"Out", valor:489000, meta:460000 },
-      { mes:"Nov", valor:431000, meta:440000 }, { mes:"Dez", valor:450000, meta:480000 },
-    ],
-    vendedores: [
-      { nome_vendedor:"Carlos Mendes",  valor_liquido:682000, operacoes:287, meta_pct:104 },
-      { nome_vendedor:"Ana Beatriz",    valor_liquido:591000, operacoes:241, meta_pct:98  },
-      { nome_vendedor:"Roberto Lima",   valor_liquido:534000, operacoes:198, meta_pct:89  },
-      { nome_vendedor:"Fernanda Costa", valor_liquido:498000, operacoes:210, meta_pct:95  },
-      { nome_vendedor:"Marcos Souza",   valor_liquido:445000, operacoes:177, meta_pct:82  },
-      { nome_vendedor:"Juliana Rocha",  valor_liquido:412000, operacoes:163, meta_pct:79  },
-      { nome_vendedor:"Thiago Alves",   valor_liquido:376000, operacoes:151, meta_pct:75  },
-      { nome_vendedor:"Patrícia Neves", valor_liquido:341000, operacoes:139, meta_pct:71  },
-    ],
-    filiais: [
-      { nome_filial:"SP Centro",  valor_liquido:1_240_000 },
-      { nome_filial:"SP Sul",     valor_liquido:890_000   },
-      { nome_filial:"RJ",         valor_liquido:720_000   },
-      { nome_filial:"MG",         valor_liquido:580_000   },
-      { nome_filial:"PR",         valor_liquido:420_000   },
-      { nome_filial:"RS",         valor_liquido:380_000   },
-    ],
-    grupos: [
-      { descricao_grupo:"Vestuário",  pct:38 },
-      { descricao_grupo:"Calçados",   pct:24 },
-      { descricao_grupo:"Acessórios", pct:19 },
-      { descricao_grupo:"Esportivos", pct:12 },
-      { descricao_grupo:"Outros",     pct:7  },
-    ],
-  },
-
-  compras: {
-    kpis: { total:2_140_820, operacoes:847, ticket_medio:2_528, fornecedores_ativos:134 },
-    periodo: [
-      { mes:"Jan", valor:158000 }, { mes:"Fev", valor:172000 }, { mes:"Mar", valor:201000 },
-      { mes:"Abr", valor:188000 }, { mes:"Mai", valor:215000 }, { mes:"Jun", valor:196000 },
-      { mes:"Jul", valor:228000 }, { mes:"Ago", valor:204000 }, { mes:"Set", valor:219000 },
-      { mes:"Out", valor:241000 }, { mes:"Nov", valor:187000 }, { mes:"Dez", valor:131000 },
-    ],
-    fornecedores: [
-      { nome_fornecedor:"Têxtil Brasil Ltda",  valor_liquido:412000, operacoes:87 },
-      { nome_fornecedor:"Confec São Paulo",    valor_liquido:358000, operacoes:74 },
-      { nome_fornecedor:"Malharia Norte",      valor_liquido:291000, operacoes:61 },
-      { nome_fornecedor:"Indústria Moda Sul",  valor_liquido:248000, operacoes:53 },
-      { nome_fornecedor:"Tecidos Globo",       valor_liquido:198000, operacoes:42 },
-    ],
-    por_categoria: [
-      { desc:"Matéria-Prima", valor:820000 },
-      { desc:"Embalagens",    valor:310000 },
-      { desc:"Serviços",      valor:480000 },
-      { desc:"Importados",    valor:530000 },
-    ],
-  },
-
-  producao: {
-    kpis: { ordens_total:1_247, em_producao:312, finalizadas:891, canceladas:44 },
-    status: [
-      { name:"Finalizada",  value:891, color:C.green },
-      { name:"Em Produção", value:312, color:C.amber },
-      { name:"Cancelada",   value:44,  color:C.red   },
-    ],
-    periodo: [
-      { mes:"Jan", qtde_inicial:98,  qtde_finalizada:87  },
-      { mes:"Fev", qtde_inicial:112, qtde_finalizada:98  },
-      { mes:"Mar", qtde_inicial:134, qtde_finalizada:121 },
-      { mes:"Abr", qtde_inicial:119, qtde_finalizada:107 },
-      { mes:"Mai", qtde_inicial:142, qtde_finalizada:128 },
-      { mes:"Jun", qtde_inicial:127, qtde_finalizada:110 },
-      { mes:"Jul", qtde_inicial:156, qtde_finalizada:139 },
-      { mes:"Ago", qtde_inicial:143, qtde_finalizada:128 },
-      { mes:"Set", qtde_inicial:161, qtde_finalizada:140 },
-      { mes:"Out", qtde_inicial:154, qtde_finalizada:133 },
-    ],
-    ordens: [
-      { n_ordem:"OP-2024-1089", grupo_ordem:"Vestuário",  tipo_producao:"Interna",  qtde_inicial:240, qtde_em_producao:120, qtde_finalizada:120, data_previsto:"30/11" },
-      { n_ordem:"OP-2024-1088", grupo_ordem:"Calçados",   tipo_producao:"Terceiro", qtde_inicial:180, qtde_em_producao:0,   qtde_finalizada:180, data_previsto:"28/11" },
-      { n_ordem:"OP-2024-1087", grupo_ordem:"Acessórios", tipo_producao:"Interna",  qtde_inicial:320, qtde_em_producao:200, qtde_finalizada:120, data_previsto:"05/12" },
-      { n_ordem:"OP-2024-1086", grupo_ordem:"Esportivos", tipo_producao:"Interna",  qtde_inicial:150, qtde_em_producao:150, qtde_finalizada:0,   data_previsto:"12/12" },
-      { n_ordem:"OP-2024-1085", grupo_ordem:"Vestuário",  tipo_producao:"Terceiro", qtde_inicial:420, qtde_em_producao:0,   qtde_finalizada:420, data_previsto:"22/11" },
-    ],
-  },
-
-  estoque: {
-    kpis: { skus_total:8_421, valor_total:12_840_000, filiais:6, giro_medio:2.3 },
-    por_filial: [
-      { nome_filial:"SP Centro", qtde:2840 }, { nome_filial:"SP Sul", qtde:1920 },
-      { nome_filial:"RJ",        qtde:1410 }, { nome_filial:"MG",     qtde:980  },
-      { nome_filial:"PR",        qtde:740  }, { nome_filial:"RS",     qtde:531  },
-    ],
-    por_grupo: [
-      { name:"Vestuário",  value:3420, color:C.blue   },
-      { name:"Calçados",   value:1840, color:C.amber  },
-      { name:"Acessórios", value:1920, color:C.purple },
-      { name:"Esportivos", value:1241, color:C.green  },
-    ],
-    top_produtos: [
-      { cod_produto:"001-P-G",  descricao1:"Camiseta Básica Preta G",  filial:"SP Centro", saldo:342 },
-      { cod_produto:"002-J-42", descricao1:"Calça Jeans Slim 42",      filial:"SP Sul",    saldo:287 },
-      { cod_produto:"003-T-40", descricao1:"Tênis Runner Branco 40",   filial:"RJ",        saldo:241 },
-      { cod_produto:"004-V-M",  descricao1:"Vestido Floral M",         filial:"SP Centro", saldo:218 },
-      { cod_produto:"005-M-M",  descricao1:"Moletom Canguru M",        filial:"MG",        saldo:197 },
-      { cod_produto:"006-S-P",  descricao1:"Saia Midi Estampada P",    filial:"PR",        saldo:183 },
-    ],
-  },
-
-  pedido_venda: {
-    kpis: { total:1_847, aprovados:1_291, a_faturar:387, valor_total:8_420_000 },
-    por_status: [
-      { name:"Aprovado",  value:1291, color:C.green },
-      { name:"A Faturar", value:387,  color:C.amber },
-      { name:"Pendente",  value:169,  color:C.red   },
-    ],
-    periodo: [
-      { mes:"Jan", total:142, valor:610000 }, { mes:"Fev", total:128, valor:548000 },
-      { mes:"Mar", total:171, valor:731000 }, { mes:"Abr", total:159, valor:682000 },
-      { mes:"Mai", total:184, valor:788000 }, { mes:"Jun", total:162, valor:694000 },
-      { mes:"Jul", total:198, valor:848000 }, { mes:"Ago", total:177, valor:758000 },
-      { mes:"Set", total:201, valor:861000 }, { mes:"Out", total:193, valor:827000 },
-      { mes:"Nov", total:132, valor:565000 }, { mes:"Dez", total:0,   valor:0      },
-    ],
-    pedidos: [
-      { pedidov:10847, cod_pedidov:"PV-10847", cliente:"Lojas Moda & Cia",    nome_vendedor:"Carlos Mendes",  data_emissao:"08/11", valor_liquido_pedido:42800, aprovado:true,  efetuado:false, status_workflow_pedido:"Aprovado"  },
-      { pedidov:10846, cod_pedidov:"PV-10846", cliente:"Fashion Store SP",    nome_vendedor:"Ana Beatriz",    data_emissao:"07/11", valor_liquido_pedido:31200, aprovado:true,  efetuado:true,  status_workflow_pedido:"Faturado"  },
-      { pedidov:10845, cod_pedidov:"PV-10845", cliente:"Boutique Elegance",   nome_vendedor:"Roberto Lima",   data_emissao:"07/11", valor_liquido_pedido:18900, aprovado:false, efetuado:false, status_workflow_pedido:"Pendente"  },
-      { pedidov:10844, cod_pedidov:"PV-10844", cliente:"Atacado Veste Bem",   nome_vendedor:"Fernanda Costa", data_emissao:"06/11", valor_liquido_pedido:87400, aprovado:true,  efetuado:true,  status_workflow_pedido:"Faturado"  },
-      { pedidov:10843, cod_pedidov:"PV-10843", cliente:"Loja do Trabalhador", nome_vendedor:"Marcos Souza",   data_emissao:"06/11", valor_liquido_pedido:24100, aprovado:true,  efetuado:false, status_workflow_pedido:"Aprovado"  },
-      { pedidov:10842, cod_pedidov:"PV-10842", cliente:"Trend Clothes",       nome_vendedor:"Juliana Rocha",  data_emissao:"05/11", valor_liquido_pedido:56700, aprovado:false, efetuado:false, status_workflow_pedido:"Pendente"  },
-    ],
-  },
-
-  pedido_compra: {
-    kpis: { total:432, aprovados:318, valor_total:3_241_000, ticket_medio:7_503 },
-    periodo: [
-      { mes:"Jan", total:31, valor:248000 }, { mes:"Fev", total:28, valor:224000 },
-      { mes:"Mar", total:42, valor:336000 }, { mes:"Abr", total:38, valor:304000 },
-      { mes:"Mai", total:45, valor:360000 }, { mes:"Jun", total:37, valor:296000 },
-      { mes:"Jul", total:49, valor:392000 }, { mes:"Ago", total:41, valor:328000 },
-      { mes:"Set", total:44, valor:352000 }, { mes:"Out", total:47, valor:376000 },
-      { mes:"Nov", total:30, valor:240000 }, { mes:"Dez", total:0,  valor:0      },
-    ],
-    pedidos: [
-      { pedidoc:4821, cod_pedidoc:"PC-4821", nome_fornecedor:"Têxtil Brasil Ltda",  nome_comprador:"Marcos Souza",  data_emissao:"09/11", valor_liquido_pedido:124000, aprovado:true,  efetuado:false, status_workflow_pedido:"Aprovado" },
-      { pedidoc:4820, cod_pedidoc:"PC-4820", nome_fornecedor:"Confec São Paulo",    nome_comprador:"Ana Beatriz",   data_emissao:"08/11", valor_liquido_pedido:89500,  aprovado:true,  efetuado:true,  status_workflow_pedido:"Efetuado" },
-      { pedidoc:4819, cod_pedidoc:"PC-4819", nome_fornecedor:"Malharia Norte",      nome_comprador:"Marcos Souza",  data_emissao:"07/11", valor_liquido_pedido:67200,  aprovado:false, efetuado:false, status_workflow_pedido:"Pendente" },
-      { pedidoc:4818, cod_pedidoc:"PC-4818", nome_fornecedor:"Indústria Moda Sul",  nome_comprador:"Carlos Mendes", data_emissao:"06/11", valor_liquido_pedido:211000, aprovado:true,  efetuado:true,  status_workflow_pedido:"Efetuado" },
-      { pedidoc:4817, cod_pedidoc:"PC-4817", nome_fornecedor:"Tecidos Globo",       nome_comprador:"Ana Beatriz",   data_emissao:"05/11", valor_liquido_pedido:45800,  aprovado:true,  efetuado:false, status_workflow_pedido:"Aprovado" },
-    ],
-  },
-};
 
 /* ═══════════════════════════════════════════════
    FORMATADORES
@@ -263,22 +79,31 @@ const fmt = {
 
 /* ═══════════════════════════════════════════════
    HOOK useApiData
-   Busca dados do backend; usa `fallback` enquanto carrega.
+   Busca dados do backend.
    Retorna { data, loading, reload }
 ═══════════════════════════════════════════════ */
-function useApiData(endpoint, fallback) {
-  const [data, setData]       = useState(fallback);
+function useApiData(endpoint) {
+  const [data, setData]       = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);
   const dateRange             = useDateRange();
+  const filters               = useFilters();
 
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    const params = dateRange
-      ? `?datai=${dateRange.datai}&dataf=${dateRange.dataf}`
-      : "";
-    fetch(`${CONFIG.API_BASE}${endpoint}${params}`)
+    const params = new URLSearchParams();
+    if (dateRange) {
+      params.append("datai", dateRange.datai);
+      params.append("dataf", dateRange.dataf);
+    }
+    if (filters) {
+      if (filters.filial && filters.filial !== "todas") params.append("filial", filters.filial);
+      if (filters.vendedor && filters.vendedor !== "todos") params.append("vendedor", filters.vendedor);
+    }
+    const queryStr = params.toString();
+    const url = `${CONFIG.API_BASE}${endpoint}${queryStr ? "?" + queryStr : ""}`;
+    fetch(url)
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -286,7 +111,7 @@ function useApiData(endpoint, fallback) {
       .then(json => setData(json))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [endpoint, dateRange]);
+  }, [endpoint, dateRange, filters]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -392,107 +217,6 @@ function LoadingOverlay() {
 }
 
 /* ═══════════════════════════════════════════════
-   TELA DE LOGIN
-═══════════════════════════════════════════════ */
-function LoginScreen({ onLogin }) {
-  const [user, setUser]   = useState("");
-  const [pass, setPass]   = useState("");
-  const [url, setUrl]     = useState(CONFIG.AUTH_ENDPOINT);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [showCfg, setShowCfg] = useState(false);
-
-  const handleLogin = async () => {
-    if (!user || !pass) { setError("Preencha usuário e senha."); return; }
-    setLoading(true); setError("");
-    try {
-      /*
-        Integração real: descomentar e ajustar conforme retorno do serviço mãe.
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ usuario: user, senha: pass }),
-        });
-        if (!res.ok) throw new Error("Credenciais inválidas");
-        const data = await res.json();
-        onLogin({ token: data.token, nome: data.nome || user, filial: data.filial || "Matriz" });
-        return;
-      */
-      // Mock: aceita qualquer usuário/senha
-      await new Promise(r => setTimeout(r, 900));
-      onLogin({ token: "mock-token-xyz", nome: user, filial: "Matriz SP" });
-    } catch (e) {
-      setError("Usuário ou senha inválidos.");
-      setLoading(false);
-    }
-  };
-
-  const inp = {
-    background:C.bg3, border:`1px solid ${C.border2}`, borderRadius:8,
-    color:C.text1, padding:"12px 16px", fontSize:14, outline:"none",
-    width:"100%", boxSizing:"border-box",
-  };
-
-  return (
-    <div style={{ minHeight:"100vh", background:C.bg0, display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"system-ui,sans-serif" }}>
-      <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0, overflow:"hidden", pointerEvents:"none" }}>
-        <div style={{ position:"absolute", top:-200, right:-200, width:600, height:600, borderRadius:"50%", background:`radial-gradient(circle, ${C.amber}08 0%, transparent 70%)` }}/>
-        <div style={{ position:"absolute", bottom:-200, left:-100, width:500, height:500, borderRadius:"50%", background:`radial-gradient(circle, ${C.blue}08 0%, transparent 70%)` }}/>
-      </div>
-      <div style={{ width:400, position:"relative" }}>
-        <div style={{ textAlign:"center", marginBottom:40 }}>
-          <div style={{ display:"inline-flex", alignItems:"center", gap:10, marginBottom:12 }}>
-            <img
-              src={logo}
-              alt="BI Corporativo"
-              style={{
-              height: 40,
-              objectFit: "contain"
-              }}
-            />
-          </div>
-          <p style={{ color:C.text2, fontSize:14, margin:0 }}>Inteligência empresarial em tempo real</p>
-        </div>
-
-        <div style={{ background:C.bg2, border:`1px solid ${C.border}`, borderRadius:16, padding:32 }}>
-          <h1 style={{ color:C.text1, fontSize:18, fontWeight:600, margin:"0 0 24px" }}>Acesso ao sistema</h1>
-          <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-            <div>
-              <label style={{ color:C.text2, fontSize:12, fontWeight:600, letterSpacing:"0.04em", display:"block", marginBottom:6 }}>USUÁRIO</label>
-              <input value={user} onChange={e=>setUser(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleLogin()} style={inp} placeholder="seu.usuario"/>
-            </div>
-            <div>
-              <label style={{ color:C.text2, fontSize:12, fontWeight:600, letterSpacing:"0.04em", display:"block", marginBottom:6 }}>SENHA</label>
-              <input value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleLogin()} type="password" style={inp} placeholder="••••••••"/>
-            </div>
-            {error && <div style={{ color:C.red, fontSize:13, display:"flex", alignItems:"center", gap:6 }}><AlertCircle size={14}/>{error}</div>}
-            <button onClick={handleLogin} disabled={loading} style={{
-              background: loading ? C.bg3 : C.blue, color:"#000", fontWeight:700, fontSize:14,
-              border:"none", borderRadius:8, padding:"14px", cursor: loading ? "wait" : "pointer",
-              marginTop:4, transition:"all 0.2s", display:"flex", alignItems:"center", justifyContent:"center", gap:8,
-            }}>
-              {loading ? <><Loader size={16} style={{animation:"spin 1s linear infinite"}}/> Autenticando...</> : "Entrar"}
-            </button>
-          </div>
-          <div style={{ marginTop:20, borderTop:`1px solid ${C.border}`, paddingTop:16 }}>
-            <button onClick={()=>setShowCfg(!showCfg)} style={{ color:C.text3, fontSize:12, background:"none", border:"none", cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
-              <Settings size={13}/> Configurar endpoint de autenticação
-            </button>
-            {showCfg && (
-              <div style={{ marginTop:10 }}>
-                <input value={url} onChange={e=>setUrl(e.target.value)} style={{ ...inp, fontSize:12 }} placeholder="https://..."/>
-                <p style={{ color:C.text3, fontSize:11, marginTop:6 }}>URL do serviço mãe que valida as credenciais.</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-      <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════
    SIDEBAR
 ═══════════════════════════════════════════════ */
 const NAV = [
@@ -501,6 +225,8 @@ const NAV = [
   { id:"compras",        label:"Compras",           icon:ShoppingCart  },
   { id:"producao",       label:"Produção",          icon:Package       },
   { id:"estoque",        label:"Estoque",           icon:Warehouse     },
+  { id:"cliente",        label:"Cliente",           icon:Users         },
+  { id:"produto",        label:"Produto",           icon:Box           },
   { id:"pedido_venda",   label:"Pedidos de Venda",  icon:ClipboardList },
   { id:"pedido_compra",  label:"Pedidos de Compra", icon:ShoppingBag   },
 ];
@@ -570,14 +296,31 @@ function Sidebar({ active, onNav, collapsed, user }) {
 ═══════════════════════════════════════════════ */
 function Header({ title, onToggleSidebar, onLogout }) {
   const { datai, dataf, setDateRange } = useDateRange();
-  const [open, setOpen] = useState(false);
+  const { filial, setFilial, vendedor, setVendedor } = useFilters();
+  const [openDate, setOpenDate] = useState(false);
+  const [openFilial, setOpenFilial] = useState(false);
+  const [openVendedor, setOpenVendedor] = useState(false);
   const [localDatai, setLocalDatai] = useState(datai);
   const [localDataf, setLocalDataf] = useState(dataf);
+
+  // Filiais e vendedores reais, carregados do backend (/api/filtros)
+  const [filiais, setFiliais]       = useState(["Todas"]);
+  const [vendedores, setVendedores] = useState(["Todos"]);
+
+  useEffect(() => {
+    fetch(`${CONFIG.API_BASE}/filtros`)
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(j => {
+        setFiliais(["Todas", ...(j.filiais || [])]);
+        setVendedores(["Todos", ...(j.vendedores || [])]);
+      })
+      .catch(() => {/* mantém só "Todas"/"Todos" se a API estiver indisponível */});
+  }, []);
 
   const handleApply = () => {
     if (localDatai && localDataf && localDatai <= localDataf) {
       setDateRange({ datai: localDatai, dataf: localDataf });
-      setOpen(false);
+      setOpenDate(false);
     }
   };
 
@@ -590,7 +333,7 @@ function Header({ title, onToggleSidebar, onLogout }) {
     setLocalDatai(di);
     setLocalDataf(df);
     setDateRange({ datai: di, dataf: df });
-    setOpen(false);
+    setOpenDate(false);
   };
 
   const fmtDate = (iso) => {
@@ -598,6 +341,9 @@ function Header({ title, onToggleSidebar, onLogout }) {
     const [y,m,d] = iso.split("-");
     return `${d}/${m}/${y}`;
   };
+
+  const displayFilial = filial === "todas" ? "Todas" : filial;
+  const displayVendedor = vendedor === "todos" ? "Todos" : vendedor;
 
   const inp = {
     background: C.bg3, border: `1px solid ${C.border2}`,
@@ -615,13 +361,13 @@ function Header({ title, onToggleSidebar, onLogout }) {
       </div>
 
       <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-        {/* Botão filtro de data */}
+        {/* Filtro de Data */}
         <div style={{ position:"relative" }}>
           <button
-            onClick={() => { setLocalDatai(datai); setLocalDataf(dataf); setOpen(o=>!o); }}
+            onClick={() => { setLocalDatai(datai); setLocalDataf(dataf); setOpenDate(o=>!o); }}
             style={{
               display:"flex", alignItems:"center", gap:8,
-              background: C.bg3, border:`1px solid ${open ? C.amber : C.border2}`,
+              background: C.bg3, border:`1px solid ${openDate ? C.amber : C.border2}`,
               borderRadius:8, padding:"6px 12px", cursor:"pointer",
               color: C.text1, fontSize:13, transition:"border-color 0.15s",
             }}
@@ -630,10 +376,10 @@ function Header({ title, onToggleSidebar, onLogout }) {
             <span style={{ color: C.text2, fontSize:12 }}>
               {fmtDate(datai)} — {fmtDate(dataf)}
             </span>
-            <ChevronRight size={13} color={C.text3} style={{ transform: open ? "rotate(90deg)" : "rotate(0)", transition:"transform 0.2s" }}/>
+            <ChevronRight size={13} color={C.text3} style={{ transform: openDate ? "rotate(90deg)" : "rotate(0)", transition:"transform 0.2s" }}/>
           </button>
 
-          {open && (
+          {openDate && (
             <div style={{
               position:"absolute", right:0, top:"calc(100% + 8px)",
               background:C.bg2, border:`1px solid ${C.border2}`,
@@ -683,6 +429,86 @@ function Header({ title, onToggleSidebar, onLogout }) {
           )}
         </div>
 
+        {/* Filtro de Filial */}
+        <div style={{ position:"relative" }}>
+          <button
+            onClick={() => setOpenFilial(o=>!o)}
+            style={{
+              display:"flex", alignItems:"center", gap:8,
+              background: C.bg3, border:`1px solid ${openFilial ? C.amber : C.border2}`,
+              borderRadius:8, padding:"6px 12px", cursor:"pointer",
+              color: C.text1, fontSize:13, transition:"border-color 0.15s",
+            }}
+          >
+            <Warehouse size={14} color={C.blue}/>
+            <span style={{ color: C.text2, fontSize:12 }}>
+              {displayFilial}
+            </span>
+            <ChevronRight size={13} color={C.text3} style={{ transform: openFilial ? "rotate(90deg)" : "rotate(0)", transition:"transform 0.2s" }}/>
+          </button>
+
+          {openFilial && (
+            <div style={{
+              position:"absolute", right:0, top:"calc(100% + 8px)",
+              background:C.bg2, border:`1px solid ${C.border2}`,
+              borderRadius:12, padding:12, width:180, zIndex:100,
+              boxShadow:"0 8px 32px rgba(0,0,0,0.5)",
+            }}>
+              {filiais.map(f => (
+                <button key={f} onClick={() => { setFilial(f === "Todas" ? "todas" : f); setOpenFilial(false); }} style={{
+                  width:"100%", display:"block", textAlign:"left",
+                  background:"none", border:"none", padding:"10px 12px", cursor:"pointer",
+                  color: displayFilial === f ? C.amber : C.text2,
+                  fontSize:13, transition:"all 0.15s", borderRadius:6,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = C.bg3; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "none"; }}
+                >{f}</button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Filtro de Vendedor */}
+        <div style={{ position:"relative" }}>
+          <button
+            onClick={() => setOpenVendedor(o=>!o)}
+            style={{
+              display:"flex", alignItems:"center", gap:8,
+              background: C.bg3, border:`1px solid ${openVendedor ? C.amber : C.border2}`,
+              borderRadius:8, padding:"6px 12px", cursor:"pointer",
+              color: C.text1, fontSize:13, transition:"border-color 0.15s",
+            }}
+          >
+            <ShoppingCart size={14} color={C.green}/>
+            <span style={{ color: C.text2, fontSize:12 }}>
+              {displayVendedor}
+            </span>
+            <ChevronRight size={13} color={C.text3} style={{ transform: openVendedor ? "rotate(90deg)" : "rotate(0)", transition:"transform 0.2s" }}/>
+          </button>
+
+          {openVendedor && (
+            <div style={{
+              position:"absolute", right:0, top:"calc(100% + 8px)",
+              background:C.bg2, border:`1px solid ${C.border2}`,
+              borderRadius:12, padding:12, width:180, zIndex:100,
+              boxShadow:"0 8px 32px rgba(0,0,0,0.5)",
+            }}>
+              {vendedores.map(v => (
+                <button key={v} onClick={() => { setVendedor(v === "Todos" ? "todos" : v); setOpenVendedor(false); }} style={{
+                  width:"100%", display:"block", textAlign:"left",
+                  background:"none", border:"none", padding:"10px 12px", cursor:"pointer",
+                  color: displayVendedor === v ? C.amber : C.text2,
+                  fontSize:13, transition:"all 0.15s", borderRadius:6,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = C.bg3; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "none"; }}
+                >{v}</button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <button style={{ background:"none", border:"none", cursor:"pointer", color:C.text3 }}><Bell size={17}/></button>
         <button onClick={onLogout} style={{ background:"none", border:"none", cursor:"pointer", color:C.text3, display:"flex", alignItems:"center", gap:6, fontSize:13 }}>
           <LogOut size={15}/> Sair
@@ -696,14 +522,14 @@ function Header({ title, onToggleSidebar, onLogout }) {
    DASHBOARD: HOME — /api/home
 ═══════════════════════════════════════════════ */
 function DashHome({ onNav }) {
-  const { data, loading } = useApiData("/home", MOCK.home);
+  const { data, loading } = useApiData("/home");
 
-  const kpis  = data.kpis                || MOCK.home.kpis;
-  const vend  = data.vendas_periodo      || MOCK.home.vendas_periodo;
-  const topV  = data.top_vendedores      || MOCK.home.top_vendedores;
-  const estF  = data.estoque_filial      || MOCK.home.estoque_filial;
-  const prodS = data.producao_status     || MOCK.home.producao_status;
-  const pvS   = data.pedido_venda_status || MOCK.home.pedido_venda_status;
+  const kpis  = data.kpis                || {};
+  const vend  = data.vendas_periodo      || [];
+  const topV  = data.top_vendedores      || [];
+  const estF  = data.estoque_filial      || [];
+  const prodS = data.producao_status     || [];
+  const pvS   = data.pedido_venda_status || [];
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:24, position:"relative" }}>
@@ -815,7 +641,7 @@ function DashHome({ onNav }) {
    Campos: MOVIMENTO + METAF/METAV
 ═══════════════════════════════════════════════ */
 function DashVendas() {
-  const { data, loading } = useApiData("/vendas", MOCK.vendas);
+  const { data, loading } = useApiData("/vendas");
   const d = data;
 
   return (
@@ -915,7 +741,7 @@ function DashVendas() {
    Campos: MOVIMENTO_COMPRA + nome_fornecedor, descricao_categoria
 ═══════════════════════════════════════════════ */
 function DashCompras() {
-  const { data, loading } = useApiData("/compras", MOCK.compras);
+  const { data, loading } = useApiData("/compras");
   const d = data;
 
   return (
@@ -990,7 +816,7 @@ function DashCompras() {
            descricao_grupo
 ═══════════════════════════════════════════════ */
 function DashProducao() {
-  const { data, loading } = useApiData("/producao", MOCK.producao);
+  const { data, loading } = useApiData("/producao");
   const d = data;
 
   return (
@@ -1087,7 +913,7 @@ function DashProducao() {
            descricao1, cod_produto, empenho, fisico
 ═══════════════════════════════════════════════ */
 function DashEstoque() {
-  const { data, loading } = useApiData("/estoque", MOCK.estoque);
+  const { data, loading } = useApiData("/estoque");
   const d = data;
 
   return (
@@ -1178,7 +1004,7 @@ function DashEstoque() {
            qtde_item_afaturar (via itens)
 ═══════════════════════════════════════════════ */
 function DashPedidoVenda() {
-  const { data, loading } = useApiData("/pedido_venda", MOCK.pedido_venda);
+  const { data, loading } = useApiData("/pedido_venda");
   const d = data;
 
   return (
@@ -1275,7 +1101,7 @@ function DashPedidoVenda() {
            status_workflow_pedido
 ═══════════════════════════════════════════════ */
 function DashPedidoCompra() {
-  const { data, loading } = useApiData("/pedido_compra", MOCK.pedido_compra);
+  const { data, loading } = useApiData("/pedido_compra");
   const d = data;
 
   return (
@@ -1343,6 +1169,377 @@ function DashPedidoCompra() {
 }
 
 /* ═══════════════════════════════════════════════
+   SEARCHABLE SELECT — seletor com busca (cliente / produto)
+═══════════════════════════════════════════════ */
+function SearchableSelect({ items, value, onChange, getKey, getLabel, getSub, placeholder = "Selecione…", icon: Icon = Search, loading = false }) {
+  const [open, setOpen] = useState(false);
+  const [term, setTerm] = useState("");
+
+  const selected = items.find(it => getKey(it) === value);
+  const filtered = (term.trim()
+    ? items.filter(it => `${getLabel(it)} ${getSub ? getSub(it) : ""}`.toLowerCase().includes(term.toLowerCase()))
+    : items
+  ).slice(0, 100);
+
+  return (
+    <div style={{ position:"relative", maxWidth:440 }}>
+      <button onClick={() => setOpen(o=>!o)} style={{
+        width:"100%", display:"flex", alignItems:"center", gap:10,
+        background:C.bg3, border:`1px solid ${open ? C.amber : C.border2}`,
+        borderRadius:10, padding:"12px 14px", cursor:"pointer",
+        color:C.text1, fontSize:14, transition:"border-color 0.15s",
+      }}>
+        <Icon size={16} color={C.amber} style={{flexShrink:0}}/>
+        <span style={{ flex:1, textAlign:"left", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", color: selected ? C.text1 : C.text3 }}>
+          {loading ? "Carregando…" : selected ? getLabel(selected) : placeholder}
+        </span>
+        <ChevronRight size={15} color={C.text3} style={{ transform: open ? "rotate(90deg)" : "rotate(0)", transition:"transform 0.2s" }}/>
+      </button>
+
+      {open && (
+        <div style={{
+          position:"absolute", left:0, right:0, top:"calc(100% + 8px)",
+          background:C.bg2, border:`1px solid ${C.border2}`, borderRadius:12,
+          padding:10, zIndex:100, boxShadow:"0 8px 32px rgba(0,0,0,0.5)",
+        }}>
+          <div style={{ position:"relative", marginBottom:8 }}>
+            <Search size={14} color={C.text3} style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)" }}/>
+            <input
+              autoFocus value={term} onChange={e=>setTerm(e.target.value)} placeholder="Buscar…"
+              style={{ width:"100%", boxSizing:"border-box", background:C.bg3, border:`1px solid ${C.border2}`,
+                       borderRadius:8, color:C.text1, padding:"9px 10px 9px 32px", fontSize:13, outline:"none" }}
+            />
+          </div>
+          <div style={{ maxHeight:300, overflowY:"auto" }}>
+            {filtered.length === 0 && (
+              <div style={{ color:C.text3, fontSize:13, padding:"12px", textAlign:"center" }}>Nenhum resultado</div>
+            )}
+            {filtered.map(it => {
+              const k = getKey(it);
+              const isSel = k === value;
+              return (
+                <button key={k} onClick={() => { onChange(k); setOpen(false); setTerm(""); }} style={{
+                  width:"100%", display:"flex", flexDirection:"column", gap:2, textAlign:"left",
+                  background: isSel ? `${C.amber}14` : "none", border:"none", borderRadius:8,
+                  padding:"9px 12px", cursor:"pointer", marginBottom:2,
+                }}
+                onMouseEnter={e=>{ if(!isSel) e.currentTarget.style.background = C.bg3; }}
+                onMouseLeave={e=>{ if(!isSel) e.currentTarget.style.background = "none"; }}
+                >
+                  <span style={{ color: isSel ? C.amber : C.text1, fontSize:13, fontWeight:500, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{getLabel(it)}</span>
+                  {getSub && <span style={{ color:C.text3, fontSize:11 }}>{getSub(it)}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Hooks de apoio aos dashboards de Cliente / Produto */
+function useEntityList(endpoint) {
+  const [items, setItems]     = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    fetch(`${CONFIG.API_BASE}${endpoint}`)
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(j => { if (alive) setItems(j.items || []); })
+      .catch(() => { if (alive) setItems([]); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [endpoint]);
+  return { items, loading };
+}
+
+function useEntityAnalysis(endpoint, paramKey, paramValue) {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(false);
+  const dateRange             = useDateRange();
+  useEffect(() => {
+    if (!paramValue) { setData(null); return; }
+    let alive = true;
+    setLoading(true);
+    const params = new URLSearchParams();
+    params.append(paramKey, paramValue);
+    if (dateRange) { params.append("datai", dateRange.datai); params.append("dataf", dateRange.dataf); }
+    fetch(`${CONFIG.API_BASE}${endpoint}?${params.toString()}`)
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(j => { if (alive) setData(j); })
+      .catch(() => { if (alive) setData(null); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [endpoint, paramKey, paramValue, dateRange]);
+  return { data, loading };
+}
+
+function EmptyState({ icon: Icon, title, subtitle }) {
+  return (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+                  gap:12, padding:"64px 24px", color:C.text3, textAlign:"center" }}>
+      <div style={{ width:56, height:56, borderRadius:14, background:C.bg3, border:`1px solid ${C.border}`,
+                    display:"flex", alignItems:"center", justifyContent:"center" }}>
+        <Icon size={26} color={C.text3}/>
+      </div>
+      <div style={{ color:C.text1, fontSize:15, fontWeight:600 }}>{title}</div>
+      {subtitle && <div style={{ fontSize:13, maxWidth:340 }}>{subtitle}</div>}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   DASHBOARD: CLIENTE — /api/clientes + /api/cliente
+═══════════════════════════════════════════════ */
+function DashCliente() {
+  const { items, loading: loadingList } = useEntityList("/clientes");
+  const [cliente, setCliente] = useState(null);
+  const { data, loading } = useEntityAnalysis("/cliente", "cliente", cliente);
+  const d = data || {};
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+      <Card>
+        <SectionTitle>Selecionar Cliente</SectionTitle>
+        <SearchableSelect
+          items={items} value={cliente} onChange={setCliente} loading={loadingList}
+          icon={User} placeholder="Busque e selecione um cliente…"
+          getKey={it => it.nome}
+          getLabel={it => it.nome}
+          getSub={it => `${fmt.num(it.pedidos)} pedidos · ${fmt.brlK(it.valor)}`}
+        />
+      </Card>
+
+      {!cliente ? (
+        <Card><EmptyState icon={Users} title="Nenhum cliente selecionado"
+          subtitle="Escolha um cliente acima para ver o histórico de pedidos, faturamento e status."/></Card>
+      ) : (
+        <>
+          {/* KPIs */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
+            <KPICard label="Total de Pedidos" value={fmt.num(d.kpis?.total)}        icon={ClipboardList} color={C.blue}   loading={loading}/>
+            <KPICard label="Valor Total"      value={fmt.brlK(d.kpis?.valor_total)} icon={TrendingUp}    color={C.green}  loading={loading}/>
+            <KPICard label="Ticket Médio"     value={fmt.brl(d.kpis?.ticket_medio)} icon={Award}         color={C.amber}  loading={loading}/>
+            <KPICard label="Último Pedido"    value={d.kpis?.ultimo_pedido || "—"}  icon={Clock}         color={C.purple} loading={loading}/>
+          </div>
+
+          {/* Pedidos por mês + status */}
+          <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:16 }}>
+            <Card style={{ position:"relative" }}>
+              {loading && <LoadingOverlay/>}
+              <SectionTitle>Pedidos e Valor por Mês</SectionTitle>
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={d.periodo}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border}/>
+                  <XAxis dataKey="mes" tick={{fill:C.text3,fontSize:11}} axisLine={false} tickLine={false}/>
+                  <YAxis yAxisId="left"  tick={{fill:C.text3,fontSize:11}} axisLine={false} tickLine={false}/>
+                  <YAxis yAxisId="right" orientation="right" tick={{fill:C.text3,fontSize:11}} axisLine={false} tickLine={false} tickFormatter={v=>`${v/1000}k`}/>
+                  <Tooltip {...CHART_TOOLTIP}/>
+                  <Legend wrapperStyle={{paddingTop:8,fontSize:12,color:C.text2}}/>
+                  <Line yAxisId="left"  type="monotone" dataKey="total" name="Pedidos" stroke={C.blue}  strokeWidth={2} dot={false}/>
+                  <Line yAxisId="right" type="monotone" dataKey="valor" name="Valor"   stroke={C.amber} strokeWidth={2} dot={false}/>
+                </LineChart>
+              </ResponsiveContainer>
+            </Card>
+
+            <Card style={{ position:"relative" }}>
+              {loading && <LoadingOverlay/>}
+              <SectionTitle>Status dos Pedidos</SectionTitle>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={d.por_status} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value">
+                    {(d.por_status||[]).map((e,i)=><Cell key={i} fill={e.color}/>)}
+                  </Pie>
+                  <Tooltip {...CHART_TOOLTIP}/>
+                </PieChart>
+              </ResponsiveContainer>
+              {(d.por_status||[]).map((s,i)=>(
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:8, marginTop:8 }}>
+                  <div style={{ width:10, height:10, borderRadius:2, background:s.color, flexShrink:0 }}/>
+                  <span style={{ color:C.text2, fontSize:13, flex:1 }}>{s.name}</span>
+                  <span style={{ color:C.text1, fontSize:13, fontFamily:"monospace", fontWeight:700 }}>{fmt.num(s.value)}</span>
+                </div>
+              ))}
+            </Card>
+          </div>
+
+          {/* Vendedores do cliente */}
+          <Card style={{ position:"relative" }}>
+            {loading && <LoadingOverlay/>}
+            <SectionTitle>Vendedores que Atenderam</SectionTitle>
+            {(d.vendedores||[]).length === 0
+              ? <div style={{ color:C.text3, fontSize:13, padding:"8px 0" }}>Sem dados no período.</div>
+              : (d.vendedores||[]).map((v,i)=>(
+                  <RankingBar key={i} rank={i+1} label={v.nome_vendedor} value={v.valor} max={d.vendedores?.[0]?.valor||1} color={i===0?C.purple:C.green}/>
+                ))}
+          </Card>
+
+          {/* Pedidos recentes */}
+          <Card style={{ position:"relative" }}>
+            {loading && <LoadingOverlay/>}
+            <SectionTitle>Pedidos Recentes</SectionTitle>
+            <div style={{ overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+                <thead>
+                  <tr style={{ borderBottom:`1px solid ${C.border2}` }}>
+                    {["Pedido","Vendedor","Filial","Data","Valor","Status","Efetuado"].map(h=>(
+                      <th key={h} style={{ color:C.text3, fontWeight:600, padding:"8px 12px", textAlign:"left", whiteSpace:"nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(d.pedidos||[]).map((p,i)=>(
+                    <tr key={i} style={{ borderBottom:`1px solid ${C.border}` }}>
+                      <td style={{ color:C.amber, padding:"10px 12px", fontFamily:"monospace", fontWeight:600 }}>{p.cod_pedidov}</td>
+                      <td style={{ color:C.text2, padding:"10px 12px", whiteSpace:"nowrap" }}>{p.nome_vendedor}</td>
+                      <td style={{ color:C.text2, padding:"10px 12px", whiteSpace:"nowrap" }}>{p.nome_filial || "—"}</td>
+                      <td style={{ color:C.text2, padding:"10px 12px" }}>{p.data_emissao}</td>
+                      <td style={{ color:C.text1, padding:"10px 12px", fontFamily:"monospace", fontWeight:600 }}>{fmt.brl(p.valor_liquido_pedido)}</td>
+                      <td style={{ padding:"10px 12px" }}>
+                        <Badge type={p.aprovado?"success":"danger"}>{p.status_workflow_pedido || (p.aprovado?"Aprovado":"Pendente")}</Badge>
+                      </td>
+                      <td style={{ padding:"10px 12px" }}><Badge type={p.efetuado?"success":"neutral"}>{p.efetuado?"Sim":"Não"}</Badge></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   DASHBOARD: PRODUTO — /api/produtos + /api/produto
+═══════════════════════════════════════════════ */
+function DashProduto() {
+  const { items, loading: loadingList } = useEntityList("/produtos");
+  const [cod, setCod] = useState(null);
+  const { data, loading } = useEntityAnalysis("/produto", "cod_produto", cod);
+  const d = data || {};
+  const temVenda = (d.kpis?.qtde_vendida || 0) > 0 || (d.venda_periodo||[]).length > 0;
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+      <Card>
+        <SectionTitle>Selecionar Produto</SectionTitle>
+        <SearchableSelect
+          items={items} value={cod} onChange={setCod} loading={loadingList}
+          icon={Box} placeholder="Busque por código ou descrição…"
+          getKey={it => it.cod_produto}
+          getLabel={it => it.descricao || it.cod_produto}
+          getSub={it => `Cód. ${it.cod_produto}${it.grupo ? " · " + it.grupo : ""}`}
+        />
+      </Card>
+
+      {!cod ? (
+        <Card><EmptyState icon={Package} title="Nenhum produto selecionado"
+          subtitle="Escolha um produto acima para ver estoque por filial, distribuição e vendas."/></Card>
+      ) : (
+        <>
+          {/* Cabeçalho do produto */}
+          <Card style={{ position:"relative" }}>
+            {loading && <LoadingOverlay/>}
+            <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+              <span style={{ color:C.text1, fontSize:18, fontWeight:700 }}>{d.info?.descricao || cod}</span>
+              <span style={{ color:C.text3, fontSize:13 }}>
+                Cód. <span style={{ fontFamily:"monospace", color:C.amber }}>{d.cod_produto || cod}</span>
+                {d.info?.grupo && d.info.grupo !== "—" ? ` · Grupo: ${d.info.grupo}` : ""}
+                {d.info?.categoria && d.info.categoria !== "—" ? ` · Categoria: ${d.info.categoria}` : ""}
+              </span>
+            </div>
+          </Card>
+
+          {/* KPIs de estoque */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
+            <KPICard label="Saldo em Estoque"   value={fmt.num(d.kpis?.saldo)}   icon={Warehouse}     color={C.blue}   loading={loading}/>
+            <KPICard label="Empenhado"          value={fmt.num(d.kpis?.empenho)} icon={ClipboardList} color={C.amber}  loading={loading}/>
+            <KPICard label="Físico"             value={fmt.num(d.kpis?.fisico)}  icon={Box}           color={C.green}  loading={loading}/>
+            <KPICard label="Filiais c/ Estoque" value={fmt.num(d.kpis?.filiais)} icon={Home}          color={C.purple} loading={loading}/>
+          </div>
+
+          {/* KPIs de venda (se houver dados de venda do produto) */}
+          {temVenda && (
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
+              <KPICard label="Qtd. Vendida"  value={fmt.num(d.kpis?.qtde_vendida)}   icon={ShoppingCart} color={C.green} loading={loading}/>
+              <KPICard label="Valor Vendido" value={fmt.brlK(d.kpis?.valor_vendido)} icon={TrendingUp}   color={C.amber} loading={loading}/>
+              <KPICard label="Operações"     value={fmt.num(d.kpis?.operacoes)}      icon={BarChart2}    color={C.blue}  loading={loading}/>
+            </div>
+          )}
+
+          {/* Estoque por filial + vendas por mês */}
+          <div style={{ display:"grid", gridTemplateColumns: temVenda ? "1fr 1fr" : "1fr", gap:16 }}>
+            <Card style={{ position:"relative" }}>
+              {loading && <LoadingOverlay/>}
+              <SectionTitle>Estoque por Filial</SectionTitle>
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={d.por_filial} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false}/>
+                  <XAxis type="number" tick={{fill:C.text3,fontSize:10}} axisLine={false} tickLine={false}/>
+                  <YAxis type="category" dataKey="nome_filial" tick={{fill:C.text2,fontSize:12}} axisLine={false} tickLine={false} width={80}/>
+                  <Tooltip {...CHART_TOOLTIP} formatter={v=>[fmt.num(v),"Saldo"]}/>
+                  <Bar dataKey="saldo" fill={C.blue} radius={[0,4,4,0]}/>
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
+
+            {temVenda && (
+              <Card style={{ position:"relative" }}>
+                {loading && <LoadingOverlay/>}
+                <SectionTitle>Vendas por Mês</SectionTitle>
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={d.venda_periodo}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.border}/>
+                    <XAxis dataKey="mes" tick={{fill:C.text3,fontSize:11}} axisLine={false} tickLine={false}/>
+                    <YAxis yAxisId="left"  tick={{fill:C.text3,fontSize:11}} axisLine={false} tickLine={false}/>
+                    <YAxis yAxisId="right" orientation="right" tick={{fill:C.text3,fontSize:11}} axisLine={false} tickLine={false} tickFormatter={v=>`${v/1000}k`}/>
+                    <Tooltip {...CHART_TOOLTIP}/>
+                    <Legend wrapperStyle={{paddingTop:8,fontSize:12,color:C.text2}}/>
+                    <Bar yAxisId="left"  dataKey="qtde"  name="Qtd"   fill={C.green} radius={[4,4,0,0]}/>
+                    <Bar yAxisId="right" dataKey="valor" name="Valor" fill={C.amber} radius={[4,4,0,0]}/>
+                  </BarChart>
+                </ResponsiveContainer>
+              </Card>
+            )}
+          </div>
+
+          {/* Detalhe de estoque por filial */}
+          <Card style={{ position:"relative" }}>
+            {loading && <LoadingOverlay/>}
+            <SectionTitle>Detalhe de Estoque por Filial</SectionTitle>
+            <div style={{ overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+                <thead>
+                  <tr style={{ borderBottom:`1px solid ${C.border2}` }}>
+                    {["Filial","Saldo","Empenho","Físico"].map(h=>(
+                      <th key={h} style={{ color:C.text3, fontWeight:600, padding:"8px 12px", textAlign:"left" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(d.por_filial||[]).map((r,i)=>(
+                    <tr key={i} style={{ borderBottom:`1px solid ${C.border}` }}>
+                      <td style={{ color:C.text1, padding:"10px 12px" }}>{r.nome_filial}</td>
+                      <td style={{ color:C.green, padding:"10px 12px", fontFamily:"monospace", fontWeight:700 }}>{fmt.num(r.saldo)}</td>
+                      <td style={{ color:C.text2, padding:"10px 12px", fontFamily:"monospace" }}>{fmt.num(r.empenho)}</td>
+                      <td style={{ color:C.text1, padding:"10px 12px", fontFamily:"monospace" }}>{fmt.num(r.fisico)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
    APP PRINCIPAL
 ═══════════════════════════════════════════════ */
 const SCREEN_TITLES = {
@@ -1351,26 +1548,48 @@ const SCREEN_TITLES = {
   compras:       "Dashboard de Compras",
   producao:      "Dashboard de Produção",
   estoque:       "Dashboard de Estoque",
+  cliente:       "Análise por Cliente",
+  produto:       "Análise por Produto",
   pedido_venda:  "Pedidos de Venda",
   pedido_compra: "Pedidos de Compra",
 };
 
 export default function App() {
-  const [session,   setSession]   = useState({ ...MOCK.usuario, token: null });
+  const [session,   setSession]   = useState({ nome: "", filial: "", perfil: "", token: null });
   const [screen,    setScreen]    = useState("home");
   const [collapsed, setCollapsed] = useState(false);
 
-  // Intervalo inicial: 2020-01-01 até hoje (cobre 2022/2023)
+  // Lê usuário gravado pelo index.html ao abrir o BI
+  useEffect(() => {
+    const raw = sessionStorage.getItem("omnia_bi_user");
+    if (raw) {
+      try {
+        const u = JSON.parse(raw);
+        setSession({ nome: u.nome || "", filial: u.filial || "", perfil: u.perfil || "", token: u.token || "ok" });
+      } catch (_) {}
+    }
+  }, []);
+
   const today = new Date().toISOString().split("T")[0];
   const [dateRange, setDateRange] = useState({ datai: "2020-01-01", dataf: today });
+  const [filial, setFilial] = useState("todas");
+  const [vendedor, setVendedor] = useState("todos");
 
-  const handleLogout = () => setSession({ ...MOCK.usuario, token: null });
+  const handleLogout = () => {
+    sessionStorage.removeItem("omnia_bi_user");
+    sessionStorage.removeItem("nornes_session");
+    // Volta para a tela de módulos do index.html
+    window.location.href = "/";
+  };
+
   const Content = {
     home:          DashHome,
     vendas:        DashVendas,
     compras:       DashCompras,
     producao:      DashProducao,
     estoque:       DashEstoque,
+    cliente:       DashCliente,
+    produto:       DashProduto,
     pedido_venda:  DashPedidoVenda,
     pedido_compra: DashPedidoCompra,
   }[screen];
@@ -1378,6 +1597,7 @@ export default function App() {
   return (
     <>
     <DateRangeCtx.Provider value={{ ...dateRange, setDateRange }}>
+    <FiltersCtx.Provider value={{ filial, setFilial, vendedor, setVendedor }}>
     <div style={{ display:"flex", minHeight:"100vh", background:C.bg0, fontFamily:"system-ui,-apple-system,sans-serif" }}>
       <Sidebar active={screen} onNav={setScreen} collapsed={collapsed} user={session}/>
       <div style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0, overflow:"hidden" }}>
@@ -1390,6 +1610,7 @@ export default function App() {
         </main>
       </div>
     </div>
+    </FiltersCtx.Provider>
     </DateRangeCtx.Provider>
     <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
     </>

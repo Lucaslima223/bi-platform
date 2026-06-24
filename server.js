@@ -91,6 +91,19 @@ async function q(sql, params = []) {
   return rows;
 }
 
+/** Igual a q(), mas devolve [] em vez de lançar erro.
+ *  Útil para consultas opcionais cujo schema pode variar
+ *  (ex.: movimento_itens.cod_produto pode não existir em todos os ETLs). */
+async function qSafe(sql, params = []) {
+  try {
+    const { rows } = await pool.query(sql, params);
+    return rows;
+  } catch (err) {
+    console.warn("qSafe ignorou erro:", err.message);
+    return [];
+  }
+}
+
 // ─── Auth em memória (use JWT real em produção) ───────────────
 const sessions = new Map();
 
@@ -919,6 +932,290 @@ app.get("/api/pedido_compra", async (req, res) => {
     });
   } catch (err) {
     console.error("/pedido_compra:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  FILTROS  –  valores reais para os seletores de filial e vendedor
+//  Fontes: MOVIMENTO.fantasia_filial  /  MOVIMENTO.nome_vendedor
+// ═══════════════════════════════════════════════════════════════
+
+app.get("/api/filtros", async (_req, res) => {
+  try {
+    const [filiais, vendedores] = await Promise.all([
+      q(`SELECT DISTINCT fantasia_filial AS nome
+           FROM movimento
+          WHERE fantasia_filial IS NOT NULL AND TRIM(fantasia_filial) <> ''
+          ORDER BY nome`),
+      q(`SELECT DISTINCT nome_vendedor AS nome
+           FROM movimento
+          WHERE nome_vendedor IS NOT NULL AND TRIM(nome_vendedor) <> ''
+          ORDER BY nome`),
+    ]);
+    res.json({
+      filiais:    filiais.map(r => r.nome),
+      vendedores: vendedores.map(r => r.nome),
+    });
+  } catch (err) {
+    console.error("/filtros:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  CLIENTES  –  lista para o seletor do dashboard de Cliente
+//  Fonte: PEDIDO_VENDA.cliente
+// ═══════════════════════════════════════════════════════════════
+
+app.get("/api/clientes", async (_req, res) => {
+  try {
+    const rows = await q(
+      `SELECT cliente                                AS nome,
+              COUNT(*)                               AS pedidos,
+              COALESCE(SUM(valor_liquido_pedido), 0) AS valor
+         FROM pedido_venda
+        WHERE cliente IS NOT NULL AND TRIM(cliente) <> ''
+        GROUP BY cliente
+        ORDER BY valor DESC
+        LIMIT 1000`
+    );
+    res.json({
+      items: rows.map(r => ({
+        nome:    r.nome,
+        pedidos: parseInt(r.pedidos || 0),
+        valor:   parseFloat(r.valor || 0),
+      })),
+    });
+  } catch (err) {
+    console.error("/clientes:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  CLIENTE  –  análise de um cliente específico
+//  Query: ?cliente=<nome>&datai=&dataf=
+//  Fonte: PEDIDO_VENDA
+// ═══════════════════════════════════════════════════════════════
+
+app.get("/api/cliente", async (req, res) => {
+  try {
+    const cliente = req.query.cliente;
+    if (!cliente) return res.status(400).json({ error: "Parâmetro 'cliente' é obrigatório" });
+    const { datai, dataf } = defaultRange(req);
+    const P = [cliente, datai, dataf];
+
+    const [kpis, status, periodo, vendedores, pedidos] = await Promise.all([
+
+      // KPIs do cliente
+      q(`SELECT COUNT(*)                                                     AS total,
+                COUNT(*) FILTER (WHERE aprovado = true)                      AS aprovados,
+                COUNT(*) FILTER (WHERE aprovado = true AND efetuado = true)  AS efetuados,
+                COALESCE(SUM(valor_liquido_pedido), 0)                       AS valor_total,
+                COALESCE(SUM(valor_liquido_pedido)/NULLIF(COUNT(*),0), 0)    AS ticket_medio,
+                MAX(data_emissao)                                           AS ultimo_pedido
+           FROM pedido_venda
+          WHERE cliente = $1 AND data_emissao BETWEEN $2 AND $3`, P),
+
+      // Status dos pedidos do cliente
+      q(`SELECT COUNT(*) FILTER (WHERE aprovado = true  AND efetuado = true)  AS aprovado,
+                COUNT(*) FILTER (WHERE aprovado = true  AND efetuado = false) AS a_faturar,
+                COUNT(*) FILTER (WHERE aprovado = false)                      AS pendente
+           FROM pedido_venda
+          WHERE cliente = $1 AND data_emissao BETWEEN $2 AND $3`, P),
+
+      // Pedidos e valor por mês
+      q(`SELECT TO_CHAR(DATE_TRUNC('month', data_emissao), 'YYYY-MM') AS mes_key,
+                COUNT(*)                              AS total,
+                COALESCE(SUM(valor_liquido_pedido),0) AS valor
+           FROM pedido_venda
+          WHERE cliente = $1 AND data_emissao BETWEEN $2 AND $3
+          GROUP BY mes_key ORDER BY mes_key`, P),
+
+      // Vendedores que atenderam o cliente
+      q(`SELECT nome_vendedor,
+                COUNT(*)                              AS pedidos,
+                COALESCE(SUM(valor_liquido_pedido),0) AS valor
+           FROM pedido_venda
+          WHERE cliente = $1 AND data_emissao BETWEEN $2 AND $3
+            AND nome_vendedor IS NOT NULL
+          GROUP BY nome_vendedor ORDER BY valor DESC LIMIT 8`, P),
+
+      // Pedidos recentes do cliente
+      q(`SELECT cod_pedidov, nome_vendedor, nome_filial, data_emissao,
+                valor_liquido_pedido, aprovado, efetuado, status_workflow_pedido
+           FROM pedido_venda
+          WHERE cliente = $1 AND data_emissao BETWEEN $2 AND $3
+          ORDER BY data_emissao DESC LIMIT 20`, P),
+    ]);
+
+    const k = kpis[0]   || {};
+    const s = status[0] || {};
+
+    res.json({
+      cliente,
+      kpis: {
+        total:         parseInt(k.total      || 0),
+        aprovados:     parseInt(k.aprovados  || 0),
+        efetuados:     parseInt(k.efetuados  || 0),
+        valor_total:   parseFloat(k.valor_total  || 0),
+        ticket_medio:  parseFloat(k.ticket_medio || 0),
+        ultimo_pedido: k.ultimo_pedido
+          ? new Date(k.ultimo_pedido).toLocaleDateString("pt-BR")
+          : "—",
+      },
+      por_status: [
+        { name:"Aprovado",  value: parseInt(s.aprovado  || 0), color:"#10b981" },
+        { name:"A Faturar", value: parseInt(s.a_faturar || 0), color:"#f09b1c" },
+        { name:"Pendente",  value: parseInt(s.pendente  || 0), color:"#ef4444" },
+      ],
+      periodo: periodo.map(r => ({
+        mes:   ptMonth(r.mes_key),
+        total: parseInt(r.total),
+        valor: parseFloat(r.valor),
+      })),
+      vendedores: vendedores.map(r => ({
+        nome_vendedor: r.nome_vendedor,
+        pedidos:       parseInt(r.pedidos || 0),
+        valor:         parseFloat(r.valor || 0),
+      })),
+      pedidos: pedidos.map(r => ({
+        cod_pedidov:            r.cod_pedidov,
+        nome_vendedor:          r.nome_vendedor,
+        nome_filial:            r.nome_filial,
+        valor_liquido_pedido:   parseFloat(r.valor_liquido_pedido || 0),
+        aprovado:               r.aprovado,
+        efetuado:               r.efetuado,
+        status_workflow_pedido: r.status_workflow_pedido,
+        data_emissao: r.data_emissao
+          ? new Date(r.data_emissao).toLocaleDateString("pt-BR", { day:"2-digit", month:"2-digit" })
+          : "—",
+      })),
+    });
+  } catch (err) {
+    console.error("/cliente:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  PRODUTOS  –  lista para o seletor do dashboard de Produto
+//  Fonte: ESTOQUE.cod_produto / descricao1
+// ═══════════════════════════════════════════════════════════════
+
+app.get("/api/produtos", async (_req, res) => {
+  try {
+    const rows = await q(
+      `SELECT cod_produto,
+              MAX(descricao1)         AS descricao,
+              MAX(descricao_grupo)    AS grupo,
+              COALESCE(SUM(saldo), 0) AS saldo
+         FROM estoque
+        WHERE cod_produto IS NOT NULL
+        GROUP BY cod_produto
+        ORDER BY descricao
+        LIMIT 2000`
+    );
+    res.json({
+      items: rows.map(r => ({
+        cod_produto: r.cod_produto,
+        descricao:   r.descricao,
+        grupo:       r.grupo,
+        saldo:       parseInt(r.saldo || 0),
+      })),
+    });
+  } catch (err) {
+    console.error("/produtos:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  PRODUTO  –  análise de um produto específico
+//  Query: ?cod_produto=<cod>&datai=&dataf=
+//  Fontes: ESTOQUE (garantido) + MOVIMENTO_ITENS (vendas, defensivo)
+// ═══════════════════════════════════════════════════════════════
+
+app.get("/api/produto", async (req, res) => {
+  try {
+    const cod = req.query.cod_produto;
+    if (!cod) return res.status(400).json({ error: "Parâmetro 'cod_produto' é obrigatório" });
+    const { datai, dataf } = defaultRange(req);
+
+    const [info, porFilial, vendaKpis, vendaPeriodo] = await Promise.all([
+
+      // Info + KPIs de estoque
+      q(`SELECT MAX(descricao1)         AS descricao,
+                MAX(descricao_grupo)     AS grupo,
+                MAX(descricao_categoria) AS categoria,
+                COALESCE(SUM(saldo),0)   AS saldo,
+                COALESCE(SUM(empenho),0) AS empenho,
+                COALESCE(SUM(fisico),0)  AS fisico,
+                COUNT(DISTINCT filial)   AS filiais
+           FROM estoque WHERE cod_produto = $1`, [cod]),
+
+      // Estoque por filial
+      q(`SELECT filial                   AS nome_filial,
+                COALESCE(SUM(saldo),0)   AS saldo,
+                COALESCE(SUM(empenho),0) AS empenho,
+                COALESCE(SUM(fisico),0)  AS fisico
+           FROM estoque WHERE cod_produto = $1
+          GROUP BY filial ORDER BY saldo DESC`, [cod]),
+
+      // KPIs de venda — DEFENSIVO (depende de movimento_itens.cod_produto)
+      qSafe(`SELECT COALESCE(SUM(mi.quantidade),0)          AS qtde_vendida,
+                    COALESCE(SUM(mi.valor_liquido_total),0) AS valor_vendido,
+                    COUNT(DISTINCT m.cod_operacao)          AS operacoes
+               FROM movimento m
+               JOIN movimento_itens mi ON mi.cod_operacao = m.cod_operacao
+              WHERE mi.cod_produto = $1 AND m.data_movimento BETWEEN $2 AND $3`,
+             [cod, datai, dataf]),
+
+      // Venda por mês — DEFENSIVO
+      qSafe(`SELECT TO_CHAR(DATE_TRUNC('month', m.data_movimento),'YYYY-MM') AS mes_key,
+                    COALESCE(SUM(mi.quantidade),0)          AS qtde,
+                    COALESCE(SUM(mi.valor_liquido_total),0) AS valor
+               FROM movimento m
+               JOIN movimento_itens mi ON mi.cod_operacao = m.cod_operacao
+              WHERE mi.cod_produto = $1 AND m.data_movimento BETWEEN $2 AND $3
+              GROUP BY mes_key ORDER BY mes_key`,
+             [cod, datai, dataf]),
+    ]);
+
+    const i  = info[0]      || {};
+    const vk = vendaKpis[0] || {};
+
+    res.json({
+      cod_produto: cod,
+      info: {
+        descricao: i.descricao || cod,
+        grupo:     i.grupo     || "—",
+        categoria: i.categoria || "—",
+      },
+      kpis: {
+        saldo:         parseInt(i.saldo   || 0),
+        empenho:       parseInt(i.empenho || 0),
+        fisico:        parseInt(i.fisico  || 0),
+        filiais:       parseInt(i.filiais || 0),
+        qtde_vendida:  parseInt(vk.qtde_vendida || 0),
+        valor_vendido: parseFloat(vk.valor_vendido || 0),
+        operacoes:     parseInt(vk.operacoes || 0),
+      },
+      por_filial: porFilial.map(r => ({
+        nome_filial: r.nome_filial,
+        saldo:   parseInt(r.saldo   || 0),
+        empenho: parseInt(r.empenho || 0),
+        fisico:  parseInt(r.fisico  || 0),
+      })),
+      venda_periodo: vendaPeriodo.map(r => ({
+        mes:   ptMonth(r.mes_key),
+        qtde:  parseInt(r.qtde || 0),
+        valor: parseFloat(r.valor || 0),
+      })),
+    });
+  } catch (err) {
+    console.error("/produto:", err);
     res.status(500).json({ error: err.message });
   }
 });

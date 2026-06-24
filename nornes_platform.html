@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -122,16 +123,6 @@ body{font-family:'DM Sans',sans-serif;background:#F7F6F4;color:var(--text);overf
 .lock-badge{position:absolute;top:14px;right:14px;background:rgba(0,0,0,0.4);border-radius:6px;padding:4px 8px;font-size:0.7rem;color:white;display:flex;align-items:center;gap:4px;z-index:3}
 .section-label{font-size:0.75rem;font-weight:500;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);margin-bottom:1rem;margin-top:2rem}
 
-/* ===== BI MODULE ===== */
-#bi-module{flex-direction:column;background:#060912}
-.bi-header{background:white;border-bottom:1px solid var(--gray-100);padding:1rem 3rem;display:flex;align-items:center;justify-content:space-between;height:70px;position:sticky;top:0;z-index:100}
-.bi-header-left{display:flex;align-items:center;gap:1rem}
-.bi-back-btn{background:none;border:none;color:var(--blue-600);cursor:pointer;font-size:1.2rem;transition:color 0.2s;padding:8px 12px}
-.bi-back-btn:hover{color:var(--blue-800)}
-.bi-title{font-family:'Sora',sans-serif;font-size:1.3rem;font-weight:700;color:var(--gray-800)}
-.bi-content{flex:1;padding:2rem;overflow-y:auto}
-.bi-iframe{width:100%;height:100%;border:none}
-
 /* Animations */
 @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
 .fade-up{animation:fadeUp 0.5s ease forwards}
@@ -158,7 +149,7 @@ body{font-family:'DM Sans',sans-serif;background:#F7F6F4;color:var(--text);overf
         }
 
         .logo-image {
-          height: 40px;
+          height: 40px; /* ajuste conforme necessário */
           width: auto;
           display: block;
         }
@@ -192,7 +183,7 @@ body{font-family:'DM Sans',sans-serif;background:#F7F6F4;color:var(--text);overf
         }
 
         .logo-image {
-          height: 40px;
+          height: 40px; /* ajuste conforme necessário */
           width: auto;
           display: block;
         }
@@ -241,7 +232,7 @@ body{font-family:'DM Sans',sans-serif;background:#F7F6F4;color:var(--text);overf
         }
 
         .logo-image {
-          height: 40px;
+          height: 40px; /* ajuste conforme necessário */
           width: auto;
           display: block;
         }
@@ -274,39 +265,6 @@ body{font-family:'DM Sans',sans-serif;background:#F7F6F4;color:var(--text);overf
       <p class="welcome-sub">Selecione um módulo para começar</p>
     </div>
     <div id="modules-grid" class="modules-grid"></div>
-  </div>
-</div>
-
-<!-- BI MODULE -->
-<div id="bi-module" class="screen">
-  <header class="bi-header">
-    <div class="bi-header-left">
-      <button class="bi-back-btn" onclick="goTo('modules')">← Voltar</button>
-      <h1 class="bi-title">Business Intelligence</h1>
-    </div>
-    <div class="header-right">
-      <div class="user-badge" onclick="toggleDropdown()">
-        <div class="user-info">
-          <div class="user-name" id="bi-username">—</div>
-          <div class="user-role" id="bi-role">—</div>
-        </div>
-        <div class="user-avatar" id="bi-avatar">?</div>
-        <div class="user-dropdown" id="user-dropdown-bi">
-          <div class="dropdown-item">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-            Meu Perfil
-          </div>
-          <div class="dropdown-divider"></div>
-          <div class="dropdown-item danger" onclick="handleLogout()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            Sair
-          </div>
-        </div>
-      </div>
-    </div>
-  </header>
-  <div class="bi-content" id="bi-content">
-    <!-- BI dashboard será carregado aqui -->
   </div>
 </div>
 
@@ -441,35 +399,17 @@ function createCard(m, isLocked, idx){
 }
 
 function openModule(m){
-  if(m.id === 'bi'){
-    sessionStorage.setItem('omnia_bi_user', JSON.stringify({
-      nome:     currentUser.name,
-      filial:   ROLE_LABELS[currentUser.role] || currentUser.role,
-      perfil:   currentUser.role,
-      token:    sessionStorage.getItem('nornes_session'),
-      initials: currentUser.initials,
-    }));
-    window.location.href = '/src/bi-dashboard.html';
-  } else {
-    alert(`Abrindo módulo: ${m.name}\n\nEm produção, este card redirecionaria para a URL do módulo correspondente.`);
-  }
+  alert(`Abrindo módulo: ${m.name}\n\nEm produção, este card redirecionaria para a URL do módulo correspondente.`);
 }
 
 function toggleDropdown(){
-  const dropdown = document.getElementById('user-dropdown');
-  const dropdownBi = document.getElementById('user-dropdown-bi');
-  if(dropdown && !dropdown.classList.contains('open')) dropdown.classList.toggle('open');
-  else if(dropdownBi && !dropdownBi.classList.contains('open')) dropdownBi.classList.toggle('open');
+  document.getElementById('user-dropdown').classList.toggle('open');
 }
 
 document.addEventListener('click', function(e){
   const badge = document.querySelector('.user-badge');
   const dropdown = document.getElementById('user-dropdown');
-  const dropdownBi = document.getElementById('user-dropdown-bi');
-  if(badge && !badge.contains(e.target)){
-    if(dropdown) dropdown.classList.remove('open');
-    if(dropdownBi) dropdownBi.classList.remove('open');
-  }
+  if(badge && !badge.contains(e.target)) dropdown.classList.remove('open');
 });
 
 function handleLogout(){
@@ -478,8 +418,7 @@ function handleLogout(){
   document.getElementById('username').value = '';
   document.getElementById('password').value = '';
   document.getElementById('error-msg').classList.remove('show');
-  const dropdowns = document.querySelectorAll('.user-dropdown');
-  dropdowns.forEach(d => d.classList.remove('open'));
+  document.getElementById('user-dropdown').classList.remove('open');
   goTo('home');
 }
 
@@ -491,12 +430,11 @@ function showError(msg){
 }
 
 function joinRequest(){
-  alert('Solicitação de acesso\n\nEntre em contato com o time interno da Omnia para solicitar seu cadastro.\n\nEmail: acesso@omnia.com.br');
+  alert('Solicitação de acesso\n\nEntre em contato com o time interno da Nornes para solicitar seu cadastro.\n\nEmail: acesso@nornes.com.br');
 }
 
 function goTo(screen){
   if(screen === 'modules' && !currentUser){goTo('login');return;}
-  if(screen === 'bi-module' && !currentUser){goTo('login');return;}
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(screen).classList.add('active');
   window.scrollTo(0,0);
