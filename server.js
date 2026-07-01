@@ -5,12 +5,21 @@
  * Instalação:
  *   npm install express pg cors dotenv
  *
- * .env:
+ * .env  (opção A — Neon / Postgres gerenciado, RECOMENDADO):
+ *   # Use a connection string "Pooled" do painel do Neon
+ *   # (o host contém "-pooler"). Ex.:
+ *   DATABASE_URL=postgresql://usuario:senha@ep-nome-123-pooler.sa-east-1.aws.neon.tech/powerbi_db?sslmode=require
+ *   PGSSL=true
+ *   PORT=3001
+ *   JWT_SECRET=troque_por_uma_chave_segura
+ *
+ * .env  (opção B — Postgres local; usado só se DATABASE_URL não existir):
  *   DB_HOST=localhost
  *   DB_PORT=5432
  *   DB_NAME=powerbi_db
  *   DB_USER=postgres
  *   DB_PASS=sua_senha
+ *   DB_SSL=false
  *   PORT=3001
  *   JWT_SECRET=troque_por_uma_chave_segura
  *
@@ -42,15 +51,38 @@ const app  = express();
 const PORT = process.env.PORT || 3001;
 
 // ─── Pool de conexão PostgreSQL ───────────────────────────────
-const pool = new Pool({
-  host:     process.env.DB_HOST     || "localhost",
-  port:     parseInt(process.env.DB_PORT || "5432"),
-  database: process.env.DB_NAME     || "powerbi_db",
-  user:     process.env.DB_USER     || "postgres",
-  password: process.env.DB_PASS     || "",
-  max: 10,
-  idleTimeoutMillis: 30_000,
-});
+// Se DATABASE_URL estiver definida (ex.: Neon), usa a connection string
+// com SSL. Caso contrário, cai para as variáveis DB_* (Postgres local).
+const NEON_OR_URL = !!process.env.DATABASE_URL;
+
+const pool = new Pool(
+  NEON_OR_URL
+    ? {
+        connectionString: process.env.DATABASE_URL,
+        // Neon exige SSL. rejectUnauthorized:false evita erros de cadeia de
+        // certificados em ambientes sem CA configurada; o tráfego segue cifrado.
+        ssl: { require: true, rejectUnauthorized: false },
+        max: 10,
+        idleTimeoutMillis: 30_000,
+        connectionTimeoutMillis: 10_000,
+      }
+    : {
+        host:     process.env.DB_HOST     || "localhost",
+        port:     parseInt(process.env.DB_PORT || "5432"),
+        database: process.env.DB_NAME     || "powerbi_db",
+        user:     process.env.DB_USER     || "postgres",
+        password: process.env.DB_PASS     || "",
+        ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : false,
+        max: 10,
+        idleTimeoutMillis: 30_000,
+      }
+);
+
+console.log(
+  NEON_OR_URL
+    ? "🔌  Conectando via DATABASE_URL (Neon/Postgres gerenciado, SSL)"
+    : "🔌  Conectando via DB_HOST/DB_NAME (Postgres local)"
+);
 
 pool.on("error", (err) => console.error("Pool error:", err));
 
@@ -83,6 +115,47 @@ function currentMonth() {
   return {
     datai: first.toISOString().split("T")[0],
     dataf: today.toISOString().split("T")[0],
+  };
+}
+
+/**
+ * Monta cláusulas opcionais de filial/vendedor para injetar num WHERE.
+ *
+ * @param req        request do Express (lê req.query.filial / req.query.vendedor)
+ * @param cols       { filial: "coluna", vendedor: "coluna" } — colunas reais da
+ *                   tabela/consulta. Omita a chave quando a dimensão não se
+ *                   aplica (ex.: compras não têm vendedor).
+ * @param startIdx   índice do próximo placeholder ($) livre na consulta.
+ *
+ * Retorna { clause, params }:
+ *   clause → ""  ou  " AND col = $n [AND col2 = $m]"  (já pronto p/ concatenar)
+ *   params → valores correspondentes, na ordem dos placeholders.
+ *
+ * O valor "todas"/"todos" (ou ausência) significa "sem filtro".
+ * O filtro de filial casa pelo NOME da filial; cada tabela guarda esse nome
+ * numa coluna diferente (movimento.fantasia_filial, pedido_*.nome_filial,
+ * estoque.filial). Garanta que esses nomes sejam consistentes no seu ETL.
+ */
+function buildScope(req, cols, startIdx) {
+  const clauses = [];
+  const params  = [];
+  let idx = startIdx;
+
+  const filial   = req.query.filial;
+  const vendedor = req.query.vendedor;
+
+  if (cols.filial && filial && filial !== "todas") {
+    clauses.push(`${cols.filial} = $${idx++}`);
+    params.push(filial);
+  }
+  if (cols.vendedor && vendedor && vendedor !== "todos") {
+    clauses.push(`${cols.vendedor} = $${idx++}`);
+    params.push(vendedor);
+  }
+
+  return {
+    clause: clauses.length ? " AND " + clauses.join(" AND ") : "",
+    params,
   };
 }
 
@@ -198,6 +271,15 @@ app.get("/api/home", async (req, res) => {
     const { datai, dataf } = defaultRange(req);
     const mes = currentMonth();
 
+    // Escopos de filial/vendedor por origem de dados.
+    //  - movimento: fantasia_filial / nome_vendedor (datas em $1,$2 → escopo $3+)
+    //  - pedido_venda: nome_filial / nome_vendedor
+    //  - estoque: filial (vendedor não se aplica)
+    const scMov   = buildScope(req, { filial:"m.fantasia_filial", vendedor:"m.nome_vendedor" }, 3);
+    const scPvDt  = buildScope(req, { filial:"nome_filial",       vendedor:"nome_vendedor"   }, 3);
+    const scPv    = buildScope(req, { filial:"nome_filial",       vendedor:"nome_vendedor"   }, 1);
+    const scEst   = buildScope(req, { filial:"filial" }, 1);
+
     const [
       fatMes, comprasMes,
       pedidosAberto, emProducao,
@@ -210,7 +292,7 @@ app.get("/api/home", async (req, res) => {
       q(`SELECT COALESCE(SUM(mi.valor_liquido_total), 0) AS faturamento
          FROM movimento m
          JOIN movimento_itens mi ON mi.cod_operacao = m.cod_operacao
-         WHERE m.data_movimento BETWEEN $1 AND $2`, [mes.datai, mes.dataf]),
+         WHERE m.data_movimento BETWEEN $1 AND $2${scMov.clause}`, [mes.datai, mes.dataf, ...scMov.params]),
 
       // Compras do mês atual
       // MOVIMENTO_COMPRA.data_movimento + MOVIMENTO_COMPRA_ITENS.valor_liquido_total
@@ -223,7 +305,7 @@ app.get("/api/home", async (req, res) => {
       // PEDIDO_VENDA.aprovado / efetuado
       q(`SELECT COUNT(*) AS abertos
          FROM pedido_venda
-         WHERE aprovado = true AND efetuado = false`, []),
+         WHERE aprovado = true AND efetuado = false${scPv.clause}`, [...scPv.params]),
 
       // Ordens em produção (soma de qtde_em_producao dos itens)
       // PRODUCAO_ITENS.qtde_em_producao
@@ -236,8 +318,9 @@ app.get("/api/home", async (req, res) => {
       q(`SELECT filial AS nome_filial,
                 COALESCE(SUM(saldo), 0) AS qtde
          FROM estoque
+         WHERE 1=1${scEst.clause}
          GROUP BY filial
-         ORDER BY qtde DESC`, []),
+         ORDER BY qtde DESC`, [...scEst.params]),
 
       // Status produção — PRODUCAO_ITENS.qtde_*
       q(`SELECT
@@ -254,7 +337,7 @@ app.get("/api/home", async (req, res) => {
            COUNT(*) FILTER (WHERE aprovado = true  AND efetuado = false) AS a_faturar,
            COUNT(*) FILTER (WHERE aprovado = false)                      AS pendente
          FROM pedido_venda
-         WHERE data_emissao BETWEEN $1 AND $2`, [datai, dataf]),
+         WHERE data_emissao BETWEEN $1 AND $2${scPvDt.clause}`, [datai, dataf, ...scPvDt.params]),
 
       // Faturamento 12 meses para gráfico de área
       // MOVIMENTO.data_movimento + MOVIMENTO_ITENS.valor_liquido_total
@@ -262,9 +345,9 @@ app.get("/api/home", async (req, res) => {
                 COALESCE(SUM(mi.valor_liquido_total), 0) AS valor
          FROM movimento m
          JOIN movimento_itens mi ON mi.cod_operacao = m.cod_operacao
-         WHERE m.data_movimento BETWEEN $1 AND $2
+         WHERE m.data_movimento BETWEEN $1 AND $2${scMov.clause}
          GROUP BY mes_key
-         ORDER BY mes_key`, [datai, dataf]),
+         ORDER BY mes_key`, [datai, dataf, ...scMov.params]),
 
       // Top 5 vendedores — MOVIMENTO.nome_vendedor + MOVIMENTO_ITENS.valor_liquido_total
       q(`SELECT m.nome_vendedor,
@@ -272,11 +355,11 @@ app.get("/api/home", async (req, res) => {
                 COUNT(DISTINCT m.cod_operacao)            AS operacoes
          FROM movimento m
          JOIN movimento_itens mi ON mi.cod_operacao = m.cod_operacao
-         WHERE m.data_movimento BETWEEN $1 AND $2
+         WHERE m.data_movimento BETWEEN $1 AND $2${scMov.clause}
            AND m.nome_vendedor IS NOT NULL
          GROUP BY m.nome_vendedor
          ORDER BY valor_liquido DESC
-         LIMIT 5`, [datai, dataf]),
+         LIMIT 5`, [datai, dataf, ...scMov.params]),
     ]);
 
     const ps = prodStatus[0] || {};
@@ -332,6 +415,9 @@ app.get("/api/home", async (req, res) => {
 app.get("/api/vendas", async (req, res) => {
   try {
     const { datai, dataf } = defaultRange(req);
+    // Filtros de filial/vendedor aplicados às consultas de MOVIMENTO.
+    // (As metas — metaf/metav — permanecem globais; ver nota no README.)
+    const scMov = buildScope(req, { filial:"m.fantasia_filial", vendedor:"m.nome_vendedor" }, 3);
 
     const [kpis, metaTotal, periodo, metaPeriodo, vendedores, metaVend, filiais, grupos] =
       await Promise.all([
@@ -343,7 +429,7 @@ app.get("/api/vendas", async (req, res) => {
              COALESCE(SUM(mi.valor_liquido_total) / NULLIF(COUNT(DISTINCT m.cod_operacao),0),0) AS ticket_medio
            FROM movimento m
            JOIN movimento_itens mi ON mi.cod_operacao = m.cod_operacao
-           WHERE m.data_movimento BETWEEN $1 AND $2`, [datai, dataf]),
+           WHERE m.data_movimento BETWEEN $1 AND $2${scMov.clause}`, [datai, dataf, ...scMov.params]),
 
         // Meta total no período — METAF.valor_meta (soma de todas as filiais vigentes)
         q(`SELECT COALESCE(SUM(valor_meta), 0) AS meta_total
@@ -355,9 +441,9 @@ app.get("/api/vendas", async (req, res) => {
                   COALESCE(SUM(mi.valor_liquido_total), 0) AS valor
            FROM movimento m
            JOIN movimento_itens mi ON mi.cod_operacao = m.cod_operacao
-           WHERE m.data_movimento BETWEEN $1 AND $2
+           WHERE m.data_movimento BETWEEN $1 AND $2${scMov.clause}
            GROUP BY mes_key
-           ORDER BY mes_key`, [datai, dataf]),
+           ORDER BY mes_key`, [datai, dataf, ...scMov.params]),
 
         // Meta por mês — METAF.valor_meta, data_inicial, data_final
         // Distribui o valor_meta igualmente pelos meses de vigência
@@ -379,11 +465,11 @@ app.get("/api/vendas", async (req, res) => {
                   COUNT(DISTINCT m.cod_operacao)            AS operacoes
            FROM movimento m
            JOIN movimento_itens mi ON mi.cod_operacao = m.cod_operacao
-           WHERE m.data_movimento BETWEEN $1 AND $2
+           WHERE m.data_movimento BETWEEN $1 AND $2${scMov.clause}
              AND m.nome_vendedor IS NOT NULL
            GROUP BY m.cod_vendedor, m.nome_vendedor
            ORDER BY valor_liquido DESC
-           LIMIT 10`, [datai, dataf]),
+           LIMIT 10`, [datai, dataf, ...scMov.params]),
 
         // Meta por vendedor — METAV.valor_meta, cod_funcionario
         q(`SELECT cod_funcionario,
@@ -397,20 +483,20 @@ app.get("/api/vendas", async (req, res) => {
                   COALESCE(SUM(mi.valor_liquido_total), 0) AS valor_liquido
            FROM movimento m
            JOIN movimento_itens mi ON mi.cod_operacao = m.cod_operacao
-           WHERE m.data_movimento BETWEEN $1 AND $2
+           WHERE m.data_movimento BETWEEN $1 AND $2${scMov.clause}
            GROUP BY m.fantasia_filial
-           ORDER BY valor_liquido DESC`, [datai, dataf]),
+           ORDER BY valor_liquido DESC`, [datai, dataf, ...scMov.params]),
 
         // Mix por grupo — MOVIMENTO_ITENS.descricao_grupo, valor_liquido_total
         q(`SELECT mi.descricao_grupo,
                   COALESCE(SUM(mi.valor_liquido_total), 0) AS valor
            FROM movimento m
            JOIN movimento_itens mi ON mi.cod_operacao = m.cod_operacao
-           WHERE m.data_movimento BETWEEN $1 AND $2
+           WHERE m.data_movimento BETWEEN $1 AND $2${scMov.clause}
              AND mi.descricao_grupo IS NOT NULL
            GROUP BY mi.descricao_grupo
            ORDER BY valor DESC
-           LIMIT 6`, [datai, dataf]),
+           LIMIT 6`, [datai, dataf, ...scMov.params]),
       ]);
 
     const k        = kpis[0]     || {};
@@ -649,6 +735,8 @@ app.get("/api/producao", async (req, res) => {
 app.get("/api/estoque", async (req, res) => {
   try {
     const COLORS = ["#3b82f6","#f09b1c","#8b5cf6","#10b981","#64748b"];
+    // Estoque só tem dimensão de filial (vendedor não se aplica).
+    const scEst = buildScope(req, { filial:"filial" }, 1);
 
     const [kpis, porFilial, topProdutos, porGrupo] = await Promise.all([
 
@@ -659,7 +747,8 @@ app.get("/api/estoque", async (req, res) => {
            COALESCE(SUM(saldo), 0)                       AS total_saldo,
            COALESCE(SUM(empenho), 0)                     AS total_empenho,
            COALESCE(SUM(fisico), 0)                      AS total_fisico
-         FROM estoque`),
+         FROM estoque
+         WHERE 1=1${scEst.clause}`, [...scEst.params]),
 
       // Estoque por filial — ESTOQUE.filial + saldo
       q(`SELECT filial AS nome_filial,
@@ -667,8 +756,9 @@ app.get("/api/estoque", async (req, res) => {
                 COALESCE(SUM(empenho),0) AS empenho,
                 COALESCE(SUM(fisico),0)  AS fisico
          FROM estoque
+         WHERE 1=1${scEst.clause}
          GROUP BY filial
-         ORDER BY qtde DESC`),
+         ORDER BY qtde DESC`, [...scEst.params]),
 
       // Top produtos por saldo — ESTOQUE.produto, descricao1, filial, saldo, empenho, fisico
       q(`SELECT cod_produto,
@@ -679,17 +769,19 @@ app.get("/api/estoque", async (req, res) => {
                 SUM(empenho)         AS empenho,
                 SUM(fisico)          AS fisico
          FROM estoque
+         WHERE 1=1${scEst.clause}
          GROUP BY cod_produto
          ORDER BY saldo DESC
-         LIMIT 20`),
+         LIMIT 20`, [...scEst.params]),
 
       // Distribuição por grupo — ESTOQUE.descricao_grupo + saldo
       q(`SELECT COALESCE(descricao_grupo, 'Outros') AS name,
                 SUM(saldo) AS value
          FROM estoque
+         WHERE 1=1${scEst.clause}
          GROUP BY descricao_grupo
          ORDER BY value DESC
-         LIMIT 5`).catch(() => []),
+         LIMIT 5`, [...scEst.params]).catch(() => []),
     ]);
 
     const k = kpis[0] || {};
@@ -747,6 +839,7 @@ app.get("/api/estoque", async (req, res) => {
 app.get("/api/pedido_venda", async (req, res) => {
   try {
     const { datai, dataf } = defaultRange(req);
+    const sc = buildScope(req, { filial:"nome_filial", vendedor:"nome_vendedor" }, 3);
 
     const [kpis, porStatus, periodo, pedidos] = await Promise.all([
 
@@ -757,7 +850,7 @@ app.get("/api/pedido_venda", async (req, res) => {
            COUNT(*) FILTER (WHERE aprovado = true AND efetuado = false)   AS a_faturar,
            COALESCE(SUM(valor_liquido_pedido), 0)                         AS valor_total
          FROM pedido_venda
-         WHERE data_emissao BETWEEN $1 AND $2`, [datai, dataf]),
+         WHERE data_emissao BETWEEN $1 AND $2${sc.clause}`, [datai, dataf, ...sc.params]),
 
       // Status — PEDIDO_VENDA.aprovado / efetuado
       q(`SELECT
@@ -765,16 +858,16 @@ app.get("/api/pedido_venda", async (req, res) => {
            COUNT(*) FILTER (WHERE aprovado = true  AND efetuado = false) AS a_faturar,
            COUNT(*) FILTER (WHERE aprovado = false)                      AS pendente
          FROM pedido_venda
-         WHERE data_emissao BETWEEN $1 AND $2`, [datai, dataf]),
+         WHERE data_emissao BETWEEN $1 AND $2${sc.clause}`, [datai, dataf, ...sc.params]),
 
       // Pedidos e valor por mês — PEDIDO_VENDA.data_emissao
       q(`SELECT TO_CHAR(DATE_TRUNC('month', data_emissao), 'YYYY-MM') AS mes_key,
                 COUNT(*)                              AS total,
                 COALESCE(SUM(valor_liquido_pedido),0) AS valor
          FROM pedido_venda
-         WHERE data_emissao BETWEEN $1 AND $2
+         WHERE data_emissao BETWEEN $1 AND $2${sc.clause}
          GROUP BY mes_key
-         ORDER BY mes_key`, [datai, dataf]),
+         ORDER BY mes_key`, [datai, dataf, ...sc.params]),
 
       // Pedidos recentes — todos os campos relevantes
       q(`SELECT pedidov, cod_pedidov, cod_filial, nome_filial,
@@ -785,9 +878,9 @@ app.get("/api/pedido_venda", async (req, res) => {
                 status_workflow_pedido, tipo_pedido_venda,
                 quantidade_pedido
          FROM pedido_venda
-         WHERE data_emissao BETWEEN $1 AND $2
+         WHERE data_emissao BETWEEN $1 AND $2${sc.clause}
          ORDER BY data_emissao DESC
-         LIMIT 30`, [datai, dataf]),
+         LIMIT 30`, [datai, dataf, ...sc.params]),
     ]);
 
     const k  = kpis[0]      || {};
@@ -854,6 +947,8 @@ app.get("/api/pedido_venda", async (req, res) => {
 app.get("/api/pedido_compra", async (req, res) => {
   try {
     const { datai, dataf } = defaultRange(req);
+    // Compra não tem vendedor (e sim comprador); aplica-se só o filtro de filial.
+    const sc = buildScope(req, { filial:"nome_filial" }, 3);
 
     const [kpis, periodo, pedidos] = await Promise.all([
 
@@ -864,16 +959,16 @@ app.get("/api/pedido_compra", async (req, res) => {
            COALESCE(SUM(valor_liquido_pedido), 0)      AS valor_total,
            COALESCE(SUM(valor_liquido_pedido) / NULLIF(COUNT(*), 0), 0) AS ticket_medio
          FROM pedido_compra
-         WHERE data_emissao BETWEEN $1 AND $2`, [datai, dataf]),
+         WHERE data_emissao BETWEEN $1 AND $2${sc.clause}`, [datai, dataf, ...sc.params]),
 
       // Pedidos por mês — PEDIDO_COMPRA.data_emissao
       q(`SELECT TO_CHAR(DATE_TRUNC('month', data_emissao), 'YYYY-MM') AS mes_key,
                 COUNT(*)                              AS total,
                 COALESCE(SUM(valor_liquido_pedido),0) AS valor
          FROM pedido_compra
-         WHERE data_emissao BETWEEN $1 AND $2
+         WHERE data_emissao BETWEEN $1 AND $2${sc.clause}
          GROUP BY mes_key
-         ORDER BY mes_key`, [datai, dataf]),
+         ORDER BY mes_key`, [datai, dataf, ...sc.params]),
 
       // Pedidos recentes — todos os campos relevantes
       q(`SELECT pedidoc, cod_pedidoc, cod_filial, nome_filial,
@@ -886,9 +981,9 @@ app.get("/api/pedido_compra", async (req, res) => {
                 aprovado, efetuado,
                 status_workflow_pedido, tipo_pedido_compra
          FROM pedido_compra
-         WHERE data_emissao BETWEEN $1 AND $2
+         WHERE data_emissao BETWEEN $1 AND $2${sc.clause}
          ORDER BY data_emissao DESC
-         LIMIT 30`, [datai, dataf]),
+         LIMIT 30`, [datai, dataf, ...sc.params]),
     ]);
 
     const k = kpis[0] || {};
@@ -1004,7 +1099,9 @@ app.get("/api/cliente", async (req, res) => {
     const cliente = req.query.cliente;
     if (!cliente) return res.status(400).json({ error: "Parâmetro 'cliente' é obrigatório" });
     const { datai, dataf } = defaultRange(req);
-    const P = [cliente, datai, dataf];
+    const sc = buildScope(req, { filial:"nome_filial", vendedor:"nome_vendedor" }, 4);
+    const P  = [cliente, datai, dataf];
+    const PA = [...P, ...sc.params];
 
     const [kpis, status, periodo, vendedores, pedidos] = await Promise.all([
 
@@ -1016,38 +1113,38 @@ app.get("/api/cliente", async (req, res) => {
                 COALESCE(SUM(valor_liquido_pedido)/NULLIF(COUNT(*),0), 0)    AS ticket_medio,
                 MAX(data_emissao)                                           AS ultimo_pedido
            FROM pedido_venda
-          WHERE cliente = $1 AND data_emissao BETWEEN $2 AND $3`, P),
+          WHERE cliente = $1 AND data_emissao BETWEEN $2 AND $3${sc.clause}`, PA),
 
       // Status dos pedidos do cliente
       q(`SELECT COUNT(*) FILTER (WHERE aprovado = true  AND efetuado = true)  AS aprovado,
                 COUNT(*) FILTER (WHERE aprovado = true  AND efetuado = false) AS a_faturar,
                 COUNT(*) FILTER (WHERE aprovado = false)                      AS pendente
            FROM pedido_venda
-          WHERE cliente = $1 AND data_emissao BETWEEN $2 AND $3`, P),
+          WHERE cliente = $1 AND data_emissao BETWEEN $2 AND $3${sc.clause}`, PA),
 
       // Pedidos e valor por mês
       q(`SELECT TO_CHAR(DATE_TRUNC('month', data_emissao), 'YYYY-MM') AS mes_key,
                 COUNT(*)                              AS total,
                 COALESCE(SUM(valor_liquido_pedido),0) AS valor
            FROM pedido_venda
-          WHERE cliente = $1 AND data_emissao BETWEEN $2 AND $3
-          GROUP BY mes_key ORDER BY mes_key`, P),
+          WHERE cliente = $1 AND data_emissao BETWEEN $2 AND $3${sc.clause}
+          GROUP BY mes_key ORDER BY mes_key`, PA),
 
       // Vendedores que atenderam o cliente
       q(`SELECT nome_vendedor,
                 COUNT(*)                              AS pedidos,
                 COALESCE(SUM(valor_liquido_pedido),0) AS valor
            FROM pedido_venda
-          WHERE cliente = $1 AND data_emissao BETWEEN $2 AND $3
+          WHERE cliente = $1 AND data_emissao BETWEEN $2 AND $3${sc.clause}
             AND nome_vendedor IS NOT NULL
-          GROUP BY nome_vendedor ORDER BY valor DESC LIMIT 8`, P),
+          GROUP BY nome_vendedor ORDER BY valor DESC LIMIT 8`, PA),
 
       // Pedidos recentes do cliente
       q(`SELECT cod_pedidov, nome_vendedor, nome_filial, data_emissao,
                 valor_liquido_pedido, aprovado, efetuado, status_workflow_pedido
            FROM pedido_venda
-          WHERE cliente = $1 AND data_emissao BETWEEN $2 AND $3
-          ORDER BY data_emissao DESC LIMIT 20`, P),
+          WHERE cliente = $1 AND data_emissao BETWEEN $2 AND $3${sc.clause}
+          ORDER BY data_emissao DESC LIMIT 20`, PA),
     ]);
 
     const k = kpis[0]   || {};
@@ -1142,6 +1239,8 @@ app.get("/api/produto", async (req, res) => {
     const cod = req.query.cod_produto;
     if (!cod) return res.status(400).json({ error: "Parâmetro 'cod_produto' é obrigatório" });
     const { datai, dataf } = defaultRange(req);
+    const scEst = buildScope(req, { filial:"filial" }, 2);
+    const scMov = buildScope(req, { filial:"m.fantasia_filial", vendedor:"m.nome_vendedor" }, 4);
 
     const [info, porFilial, vendaKpis, vendaPeriodo] = await Promise.all([
 
@@ -1153,15 +1252,15 @@ app.get("/api/produto", async (req, res) => {
                 COALESCE(SUM(empenho),0) AS empenho,
                 COALESCE(SUM(fisico),0)  AS fisico,
                 COUNT(DISTINCT filial)   AS filiais
-           FROM estoque WHERE cod_produto = $1`, [cod]),
+           FROM estoque WHERE cod_produto = $1${scEst.clause}`, [cod, ...scEst.params]),
 
       // Estoque por filial
       q(`SELECT filial                   AS nome_filial,
                 COALESCE(SUM(saldo),0)   AS saldo,
                 COALESCE(SUM(empenho),0) AS empenho,
                 COALESCE(SUM(fisico),0)  AS fisico
-           FROM estoque WHERE cod_produto = $1
-          GROUP BY filial ORDER BY saldo DESC`, [cod]),
+           FROM estoque WHERE cod_produto = $1${scEst.clause}
+          GROUP BY filial ORDER BY saldo DESC`, [cod, ...scEst.params]),
 
       // KPIs de venda — DEFENSIVO (depende de movimento_itens.cod_produto)
       qSafe(`SELECT COALESCE(SUM(mi.quantidade),0)          AS qtde_vendida,
@@ -1169,8 +1268,8 @@ app.get("/api/produto", async (req, res) => {
                     COUNT(DISTINCT m.cod_operacao)          AS operacoes
                FROM movimento m
                JOIN movimento_itens mi ON mi.cod_operacao = m.cod_operacao
-              WHERE mi.cod_produto = $1 AND m.data_movimento BETWEEN $2 AND $3`,
-             [cod, datai, dataf]),
+              WHERE mi.cod_produto = $1 AND m.data_movimento BETWEEN $2 AND $3${scMov.clause}`,
+             [cod, datai, dataf, ...scMov.params]),
 
       // Venda por mês — DEFENSIVO
       qSafe(`SELECT TO_CHAR(DATE_TRUNC('month', m.data_movimento),'YYYY-MM') AS mes_key,
@@ -1178,9 +1277,9 @@ app.get("/api/produto", async (req, res) => {
                     COALESCE(SUM(mi.valor_liquido_total),0) AS valor
                FROM movimento m
                JOIN movimento_itens mi ON mi.cod_operacao = m.cod_operacao
-              WHERE mi.cod_produto = $1 AND m.data_movimento BETWEEN $2 AND $3
+              WHERE mi.cod_produto = $1 AND m.data_movimento BETWEEN $2 AND $3${scMov.clause}
               GROUP BY mes_key ORDER BY mes_key`,
-             [cod, datai, dataf]),
+             [cod, datai, dataf, ...scMov.params]),
     ]);
 
     const i  = info[0]      || {};

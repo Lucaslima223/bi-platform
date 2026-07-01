@@ -1259,6 +1259,7 @@ function useEntityAnalysis(endpoint, paramKey, paramValue) {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(false);
   const dateRange             = useDateRange();
+  const filters               = useFilters();
   useEffect(() => {
     if (!paramValue) { setData(null); return; }
     let alive = true;
@@ -1266,13 +1267,17 @@ function useEntityAnalysis(endpoint, paramKey, paramValue) {
     const params = new URLSearchParams();
     params.append(paramKey, paramValue);
     if (dateRange) { params.append("datai", dateRange.datai); params.append("dataf", dateRange.dataf); }
+    if (filters) {
+      if (filters.filial   && filters.filial   !== "todas") params.append("filial",   filters.filial);
+      if (filters.vendedor && filters.vendedor !== "todos") params.append("vendedor", filters.vendedor);
+    }
     fetch(`${CONFIG.API_BASE}${endpoint}?${params.toString()}`)
       .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
       .then(j => { if (alive) setData(j); })
       .catch(() => { if (alive) setData(null); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [endpoint, paramKey, paramValue, dateRange]);
+  }, [endpoint, paramKey, paramValue, dateRange, filters]);
   return { data, loading };
 }
 
